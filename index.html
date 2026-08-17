@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PeerScanner - WebRTC Barcode Scanner</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Connection Setup Screen -->
+    <div id="connectionScreen" class="screen active">
+        <div class="connection-container">
+            <h1>PeerScanner</h1>
+            <p class="subtitle">WebRTC Barcode Scanner</p>
+            
+            <div class="connection-form">
+                <div class="form-group">
+                    <label for="peerId">Your Peer ID:</label>
+                    <div class="peer-id-display" id="peerId">Generating...</div>
+                    <button id="copyPeerIdBtn" class="btn btn-secondary">Copy ID</button>
+                </div>
+                
+                <div class="divider">OR</div>
+                
+                <div class="form-group">
+                    <label for="remotePeerId">Connect to Peer ID:</label>
+                    <input type="text" id="remotePeerId" placeholder="Enter peer ID to connect" class="input-field">
+                    <button id="connectBtn" class="btn btn-primary">Connect</button>
+                </div>
+                
+                <div id="connectionStatus" class="status-message"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Camera & Scanner Screen -->
+    <div id="scannerScreen" class="screen">
+        <div class="camera-container">
+            <video id="videoElement" autoplay playsinline muted></video>
+            <canvas id="canvasElement" style="display: none;"></canvas>
+            <div class="scanner-overlay">
+                <div class="scan-box"></div>
+            </div>
+        </div>
+
+        <!-- Peer Status Badge -->
+        <div id="peerStatusBadge" class="peer-status">
+            <span id="peerStatusText">Connected to peer</span>
+        </div>
+
+        <!-- Floating Action Button (FAB) -->
+        <button id="fabButton" class="fab">
+            <span class="fab-icon">📋</span>
+            <span class="fab-text">Scanned</span>
+        </button>
+
+        <!-- Scanned Items Modal -->
+        <div id="scannedModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Scanned Barcodes</h2>
+                    <button id="closeModalBtn" class="close-btn">&times;</button>
+                </div>
+                <div id="scannedList" class="scanned-list"></div>
+                <div class="modal-footer">
+                    <button id="clearScannedBtn" class="btn btn-secondary">Clear All</button>
+                    <button id="exportScannedBtn" class="btn btn-primary">Export</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Action Bar -->
+        <div class="action-bar">
+            <button id="disconnectBtn" class="btn btn-secondary">Disconnect</button>
+            <button id="torchBtn" class="btn btn-secondary">💡 Torch</button>
+        </div>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loadingIndicator" class="loading-indicator">
+        <div class="spinner"></div>
+        <p>Initializing camera...</p>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
