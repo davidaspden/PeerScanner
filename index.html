@@ -36,8 +36,7 @@
     <!-- Camera & Scanner Screen -->
     <div id="scannerScreen" class="screen">
         <div class="camera-container">
-            <video id="videoElement" autoplay playsinline muted></video>
-            <canvas id="canvasElement" style="display: none;"></canvas>
+            <div id="quagga-container"></div>
             <div class="scanner-overlay">
                 <div class="scan-box"></div>
             </div>
@@ -48,10 +47,15 @@
             <span id="peerStatusText">Connected to peer</span>
         </div>
 
+        <!-- Last Scanned Item Display -->
+        <div id="lastScannedDisplay" class="last-scanned">
+            <span id="lastScannedCode">Scanning...</span>
+        </div>
+
         <!-- Floating Action Button (FAB) -->
         <button id="fabButton" class="fab">
             <span class="fab-icon">📋</span>
-            <span class="fab-text">Scanned</span>
+            <span class="fab-count" id="fabCount">0</span>
         </button>
 
         <!-- Scanned Items Modal -->
@@ -83,7 +87,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
