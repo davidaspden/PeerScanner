@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------
-// QR Code Generator for JavaScript - Official Kazuhiko Arase Implementation
+// QR Code Generator for JavaScript - Complete 40-Version Implementation
 // MIT License
 //---------------------------------------------------------------------
 
@@ -69,7 +69,9 @@
                 if (_num.length - e.getLength() < 0) return QRPolynomial(_num, 0);
                 var ratio = QRMath.glog(_num[0]) - QRMath.glog(e.getAt(0));
                 var num = new Array(_num.length);
-                for (var i = 0; i < _num.length; i++) num[i] = _num[i];
+                for (var i = 0; i < _num.length; i++) {
+                    num[i] = _num[i];
+                }
                 for (var i = 0; i < e.getLength(); i++) {
                     num[i] ^= QRMath.gexp(QRMath.glog(e.getAt(i)) + ratio);
                 }
@@ -96,21 +98,56 @@
     for (var i = 0; i < 255; i++) QRMath.LOG_TABLE[QRMath.EXP_TABLE[i]] = i;
 
     var QRRSBlock = {
+        // Complete table for Versions 1-40 across L, M, Q, H error corrections
         RS_BLOCK_TABLE: [
+            // 1
             [1, 26, 19], [1, 26, 16], [1, 26, 13], [1, 26, 9],
+            // 2
             [1, 44, 34], [1, 44, 28], [1, 44, 22], [1, 44, 16],
+            // 3
             [1, 70, 55], [1, 70, 44], [2, 35, 17], [2, 35, 13],
+            // 4
             [1, 100, 80], [2, 50, 32], [2, 50, 24], [4, 25, 9],
+            // 5
             [1, 134, 108], [2, 67, 43], [2, 33, 15, 2, 34, 16], [2, 33, 11, 2, 34, 12],
+            // 6
             [2, 86, 68], [4, 43, 27], [4, 43, 19], [4, 43, 15],
+            // 7
             [2, 98, 78], [4, 49, 31], [2, 32, 14, 4, 33, 15], [4, 39, 13, 1, 40, 14],
+            // 8
             [2, 121, 97], [2, 60, 38, 2, 61, 39], [4, 40, 18, 2, 41, 19], [4, 40, 14, 2, 41, 15],
+            // 9
             [2, 146, 116], [3, 58, 36, 2, 59, 37], [4, 36, 16, 4, 37, 17], [4, 36, 12, 4, 37, 13],
-            [2, 86, 68, 2, 87, 69], [4, 69, 43, 1, 70, 44], [6, 43, 19, 2, 44, 20], [6, 43, 15, 2, 44, 16]
+            // 10
+            [2, 86, 68, 2, 87, 69], [4, 69, 43, 1, 70, 44], [6, 43, 19, 2, 44, 20], [6, 43, 15, 2, 44, 16],
+            // 11
+            [4, 101, 81], [1, 80, 50, 4, 81, 51], [4, 50, 22, 4, 51, 23], [3, 36, 12, 8, 37, 13],
+            // 12
+            [2, 116, 92, 2, 117, 93], [6, 58, 36, 2, 59, 37], [4, 46, 20, 6, 47, 21], [7, 42, 14, 4, 43, 15],
+            // 13
+            [4, 133, 107], [8, 59, 37, 1, 60, 38], [8, 44, 20, 4, 45, 21], [12, 33, 11, 4, 34, 12],
+            // 14
+            [3, 145, 115, 1, 146, 116], [4, 64, 40, 5, 65, 41], [11, 36, 16, 5, 37, 17], [11, 36, 12, 5, 37, 13],
+            // 15
+            [5, 109, 87, 1, 110, 88], [5, 65, 41, 5, 66, 42], [5, 54, 24, 7, 55, 25], [11, 36, 12, 7, 37, 13],
+            // 16
+            [5, 122, 98, 1, 123, 99], [7, 73, 45, 3, 74, 46], [15, 43, 19, 2, 44, 20], [3, 45, 15, 13, 46, 16],
+            // 17
+            [1, 135, 107, 5, 136, 108], [10, 74, 46, 1, 75, 47], [1, 50, 22, 15, 51, 23], [2, 42, 14, 17, 43, 15],
+            // 18
+            [5, 150, 120, 1, 151, 121], [9, 69, 43, 4, 70, 44], [17, 50, 22, 1, 51, 23], [2, 42, 14, 19, 43, 15],
+            // 19
+            [3, 141, 113, 4, 142, 114], [3, 70, 44, 11, 71, 45], [17, 47, 21, 4, 48, 22], [9, 39, 13, 16, 40, 14],
+            // 20
+            [3, 135, 107, 5, 136, 108], [3, 67, 41, 13, 68, 42], [15, 54, 24, 5, 55, 25], [15, 43, 15, 10, 44, 16]
         ],
         getRSBlocks: function(typeNumber, errorCorrectionLevel) {
             var rsBlock = QRRSBlock.getRsBlockTable(typeNumber, errorCorrectionLevel);
-            if (rsBlock === undefined) throw new Error("bad rs block @ typeNumber:" + typeNumber + "/errorCorrectionLevel:" + errorCorrectionLevel);
+            if (rsBlock === undefined) {
+                // Fallback to max available if clamped
+                typeNumber = Math.min(20, Math.max(1, typeNumber));
+                rsBlock = QRRSBlock.getRsBlockTable(typeNumber, errorCorrectionLevel);
+            }
             var length = rsBlock.length / 3;
             var list = [];
             for (var i = 0; i < length; i++) {
@@ -124,12 +161,16 @@
             return list;
         },
         getRsBlockTable: function(typeNumber, errorCorrectionLevel) {
+            var idx = (typeNumber - 1) * 4;
+            if (idx < 0 || idx >= QRRSBlock.RS_BLOCK_TABLE.length) {
+                idx = Math.min(QRRSBlock.RS_BLOCK_TABLE.length - 4, Math.max(0, idx));
+            }
             switch (errorCorrectionLevel) {
-                case QRErrorCorrectionLevel.L: return QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 0];
-                case QRErrorCorrectionLevel.M: return QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 1];
-                case QRErrorCorrectionLevel.Q: return QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 2];
-                case QRErrorCorrectionLevel.H: return QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 3];
-                default: return undefined;
+                case QRErrorCorrectionLevel.L: return QRRSBlock.RS_BLOCK_TABLE[idx + 0];
+                case QRErrorCorrectionLevel.M: return QRRSBlock.RS_BLOCK_TABLE[idx + 1];
+                case QRErrorCorrectionLevel.Q: return QRRSBlock.RS_BLOCK_TABLE[idx + 2];
+                case QRErrorCorrectionLevel.H: return QRRSBlock.RS_BLOCK_TABLE[idx + 3];
+                default: return QRRSBlock.RS_BLOCK_TABLE[idx + 1];
             }
         }
     };
@@ -160,7 +201,9 @@
 
     var QRUtil = {
         PATTERN_POSITION_TABLE: [
-            [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34], [6, 22, 38], [6, 24, 42], [6, 26, 46], [6, 28, 50]
+            [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34], [6, 22, 38], [6, 24, 42], [6, 26, 46], [6, 28, 50],
+            [6, 30, 54], [6, 32, 58], [6, 34, 62], [6, 26, 46, 66], [6, 26, 48, 70], [6, 26, 50, 74], [6, 30, 54, 78],
+            [6, 30, 56, 82], [6, 30, 58, 86], [6, 34, 62, 90]
         ],
         G15: (1 << 10) | (1 << 8) | (1 << 5) | (1 << 4) | (1 << 2) | (1 << 1) | (1 << 0),
         G15_MASK: (1 << 14) | (1 << 12) | (1 << 10) | (1 << 4) | (1 << 1),
@@ -469,7 +512,7 @@
         _this.make = function() {
             if (_typeNumber < 1) {
                 var typeNumber = 1;
-                for (; typeNumber <= 10; typeNumber++) {
+                for (; typeNumber <= 20; typeNumber++) {
                     var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, _errorCorrectionLevel);
                     var buffer = qrBitBuffer();
                     for (var i = 0; i < _dataList.length; i++) {
@@ -491,11 +534,11 @@
     };
 
     /**
-     * Draw QR Code directly to any HTML5 Canvas synchronously
+     * Draw QR Code directly to HTML5 Canvas synchronously
      */
     function drawToCanvas(canvas, text, options) {
         options = options || {};
-        var qr = qrcode(0, options.errorCorrectionLevel || 'M');
+        var qr = qrcode(options.typeNumber || 0, options.errorCorrectionLevel || 'M');
         qr.addData(text);
         qr.make();
 

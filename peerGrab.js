@@ -1,8 +1,8 @@
 /**
  * peerGrab.js - Client Optical QR Stream Receiver & Processor
- * Defaults to front-facing camera, parses streaming tsX-code items,
- * renders live ACK QR code with complete list of parsed indices,
- * updates 100-cell progress grid, and exports results as JSON.
+ * Pinned camera & ACK QR code, 25-char Hex Bitset ACK encoding,
+ * robust state preservation across multiple stream passes,
+ * and responsive 100-cell progress grid.
  */
 
 (function () {
@@ -15,7 +15,6 @@
         totalCount: DEFAULT_TOTAL,
         hasReceivedLastMarker: false,
         receivedMap: new Map(), // index -> { index, tote, rawCode, timestamp }
-        itemsArray: [],
         isScanning: false,
         currentFacingMode: 'user', // Default to front-facing camera!
         camStream: null,
@@ -31,7 +30,7 @@
         receiverSection: document.getElementById('receiverSection'),
         resultsSection: document.getElementById('resultsSection'),
         
-        // Camera Viewfinder
+        // Camera
         cameraBox: document.getElementById('cameraBox'),
         clientVideo: document.getElementById('clientVideo'),
         clientScanCanvas: document.getElementById('clientScanCanvas'),
@@ -52,7 +51,7 @@
         ackCanvas: document.getElementById('ackCanvas'),
         ackCountBadge: document.getElementById('ackCountBadge'),
         
-        // Results Screen
+        // Results
         resultsTotalBadge: document.getElementById('resultsTotalBadge'),
         resultsList: document.getElementById('resultsList'),
         exportJsonBtn: document.getElementById('exportJsonBtn'),
@@ -88,7 +87,7 @@
     }
 
     /**
-     * Build the 100-cell progress grid (cells without numbers for a compact square look)
+     * Build the 100-cell progress grid and apply existing state
      */
     function buildGridDOM() {
         if (!elements.clientGrid) return;
@@ -96,34 +95,19 @@
 
         for (let i = 0; i < state.totalCount; i++) {
             const block = document.createElement('div');
-            block.className = 'chunk-block missing';
+            const isCaptured = state.receivedMap.has(i);
+            block.className = isCaptured ? 'chunk-block ack' : 'chunk-block missing';
             block.id = `clientBlock_${i}`;
-            block.title = `Tote #${i + 1} (Missing)`;
+            const item = state.receivedMap.get(i);
+            block.title = isCaptured ? `Tote #${i + 1}: ${item.tote}` : `Tote #${i + 1} (Missing)`;
             elements.clientGrid.appendChild(block);
         }
     }
 
-    function initializePlaceholderArray(count) {
+    function setTargetTotal(count) {
+        if (count === state.totalCount && state.hasReceivedLastMarker) return;
         state.totalCount = count;
-        state.itemsArray = new Array(count).fill(null).map((_, i) => ({
-            index: i,
-            tote: null,
-            rawCode: null,
-            timestamp: null,
-            status: 'missing'
-        }));
-
-        state.receivedMap.forEach((val, idx) => {
-            if (idx < count) {
-                state.itemsArray[idx] = {
-                    index: idx,
-                    tote: val.tote,
-                    rawCode: val.rawCode,
-                    timestamp: val.timestamp,
-                    status: 'captured'
-                };
-            }
-        });
+        state.hasReceivedLastMarker = true;
 
         if (elements.targetTotalText) elements.targetTotalText.textContent = count;
         buildGridDOM();
@@ -154,7 +138,6 @@
         }
 
         state.isScanning = false;
-        // Hardware release pause
         await new Promise(r => setTimeout(r, 200));
     }
 
@@ -222,7 +205,7 @@
             if (!state.isScanning || !elements.clientVideo || state.isComplete) return;
             if (elements.clientVideo.readyState < 2) return;
 
-            // 1. Try native BarcodeDetector
+            // 1. Native BarcodeDetector
             if (state.barcodeDetector) {
                 try {
                     const codes = await state.barcodeDetector.detect(elements.clientVideo);
@@ -246,17 +229,16 @@
                     processDetectedQrCode(result.data);
                 }
             }
-        }, 80);
+        }, 60);
     }
 
     /**
-     * Process detected QR code string: tsX-tote or tsX-tote-last
+     * Parse detected QR code string: ts<index>-<tote>(-last)?
      */
     function processDetectedQrCode(text) {
         if (!text || typeof text !== 'string' || state.isComplete) return;
         text = text.trim();
 
-        // Pattern: ts<index>-<tote>(-last)?
         const match = text.match(/^ts(\d+)-(.+?)(-last)?$/);
         if (!match) return;
 
@@ -264,16 +246,15 @@
         const rawTote = match[2];
         const isLast = Boolean(match[3]);
 
-        // Lock total when -last marker is found
+        // Lock total when -last is detected
         if (isLast && !state.hasReceivedLastMarker) {
-            state.hasReceivedLastMarker = true;
-            const computedTotal = index + 1;
-            initializePlaceholderArray(computedTotal);
+            setTargetTotal(index + 1);
         }
 
-        // Avoid duplicate reprocessing
+        // Ignore if already captured
         if (state.receivedMap.has(index)) return;
 
+        // Store new chunk
         const now = new Date().toISOString();
         state.receivedMap.set(index, {
             index: index,
@@ -282,43 +263,33 @@
             timestamp: now
         });
 
-        if (state.itemsArray.length > index) {
-            state.itemsArray[index] = {
-                index: index,
-                tote: rawTote,
-                rawCode: text,
-                timestamp: now,
-                status: 'captured'
-            };
-        }
-
-        // Feedback sound and flash
+        // Chirp sound and viewfinder flash
         playChirp();
         if (elements.clientScanBox) {
             elements.clientScanBox.classList.add('success');
             setTimeout(() => {
                 if (elements.clientScanBox) elements.clientScanBox.classList.remove('success');
-            }, 300);
+            }, 250);
         }
 
         if (elements.lastCapturedCode) {
             elements.lastCapturedCode.textContent = `[#${index + 1}] ${rawTote}`;
         }
 
-        // Light up grid square
+        // Update block in grid
         const block = document.getElementById(`clientBlock_${index}`);
         if (block) {
             block.className = 'chunk-block ack just-added';
             block.title = `Tote #${index + 1}: ${rawTote}`;
             setTimeout(() => {
                 if (block) block.classList.remove('just-added');
-            }, 500);
+            }, 400);
         }
 
         updateProgressUI();
         queueAckQrUpdate();
 
-        // Check if all chunks have been collected
+        // Check if all chunks received
         if (state.receivedMap.size >= state.totalCount) {
             onAllTotesCollected();
         }
@@ -336,52 +307,78 @@
     }
 
     // =========================================================================
-    // LIVE ACK QR CODE GENERATOR (COMPOSES COMPLETE LIST OF INDEXES)
+    // CONSTANT-SIZE 25-CHAR HEX BITSET ACK QR GENERATOR
     // =========================================================================
+
+    /**
+     * Encode 100 binary state flags as a static 25-character Hex Bitset string
+     * e.g. "ACK:H:3F00000000000000000000000"
+     * Produces a fixed Version 2 QR code with large high-contrast modules!
+     */
+    function encodeAckHexBitset(receivedSet, total = 100) {
+        let hex = '';
+        const numNibbles = Math.ceil(total / 4); // 25 nibbles for 100 items
+        for (let nib = 0; nib < numNibbles; nib++) {
+            let val = 0;
+            for (let b = 0; b < 4; b++) {
+                const idx = nib * 4 + b;
+                if (idx < total && receivedSet.has(idx)) {
+                    val |= (1 << b);
+                }
+            }
+            hex += val.toString(16);
+        }
+        return `ACK:H:${hex}`;
+    }
 
     function queueAckQrUpdate() {
         if (state.ackDebounceTimer) clearTimeout(state.ackDebounceTimer);
         state.ackDebounceTimer = setTimeout(() => {
             updateAckQRCode();
-        }, 150);
+        }, 100);
     }
 
-    /**
-     * Render the ACK QR Code with the complete list of parsed indices
-     */
     function updateAckQRCode() {
         if (!elements.ackCanvas) return;
 
         const count = state.receivedMap.size;
         if (elements.ackCountBadge) {
-            elements.ackCountBadge.textContent = `${count} / ${state.totalCount} ACK'd`;
+            elements.ackCountBadge.textContent = `${count} / ${state.totalCount}`;
         }
 
         if (count === 0) {
             const ctx = elements.ackCanvas.getContext('2d');
             ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, 200, 200);
+            ctx.fillRect(0, 0, 180, 180);
             ctx.fillStyle = '#64748b';
-            ctx.font = 'bold 14px sans-serif';
+            ctx.font = 'bold 13px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('Awaiting scans...', 100, 105);
+            ctx.fillText('Awaiting scans...', 90, 95);
             return;
         }
 
-        // Build complete list of sorted indexes: "ACK:0,1,2,3,4,5..."
-        const sortedIndices = Array.from(state.receivedMap.keys()).sort((a, b) => a - b);
-        const payload = `ACK:${sortedIndices.join(',')}`;
+        // Constant 25-character Hex payload
+        const payload = encodeAckHexBitset(state.receivedMap, state.totalCount);
 
         if (window.QRCodeLib && window.QRCodeLib.drawToCanvas) {
             try {
+                // Fixed Version 2 QR Code: 25x25 modules, giant chunky pixels, instant scan!
                 window.QRCodeLib.drawToCanvas(elements.ackCanvas, payload, {
-                    width: 200,
-                    height: 200,
+                    typeNumber: 2,
+                    width: 180,
+                    height: 180,
                     margin: 1,
                     errorCorrectionLevel: 'L'
                 });
             } catch (e) {
-                console.warn('ACK QR rendering error:', e);
+                console.warn('ACK QR rendering fallback:', e);
+                // Fallback to auto typeNumber
+                window.QRCodeLib.drawToCanvas(elements.ackCanvas, payload, {
+                    width: 180,
+                    height: 180,
+                    margin: 1,
+                    errorCorrectionLevel: 'L'
+                });
             }
         }
     }
@@ -396,7 +393,6 @@
 
         await stopCamera();
 
-        // Switch to Results Screen
         if (elements.receiverSection) elements.receiverSection.style.display = 'none';
         if (elements.resultsSection) elements.resultsSection.style.display = 'block';
 
@@ -446,9 +442,6 @@
         });
     }
 
-    /**
-     * Export as JSON array of [{ barcode, timestamp }]
-     */
     function exportJSON() {
         const exportData = [];
         for (let i = 0; i < state.totalCount; i++) {
@@ -496,9 +489,10 @@
         state.isComplete = false;
         state.hasReceivedLastMarker = false;
         state.receivedMap.clear();
-        state.itemsArray = [];
         
-        initializePlaceholderArray(DEFAULT_TOTAL);
+        buildGridDOM();
+        updateProgressUI();
+        updateAckQRCode();
 
         if (elements.resultsSection) elements.resultsSection.style.display = 'none';
         if (elements.receiverSection) elements.receiverSection.style.display = 'block';
@@ -537,7 +531,7 @@
     }
 
     // =========================================================================
-    // EVENT LISTENERS & INITIALIZATION
+    // INITIALIZATION
     // =========================================================================
 
     function bindEvents() {
@@ -563,7 +557,7 @@
     }
 
     function init() {
-        initializePlaceholderArray(DEFAULT_TOTAL);
+        buildGridDOM();
         bindEvents();
         startCamera();
     }

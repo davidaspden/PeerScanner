@@ -2,7 +2,7 @@
  * app.js - Optical Tote Broadcaster & Controller (Host)
  * Accepts pasted Totes/barcodes, chunks into tsX-code items,
  * broadcasts animated QR codes at 10 FPS, skips ACK'd frames on loop,
- * and scans client ACK QR codes using front-facing webcam.
+ * and decodes client's constant 25-character Hex Bitset ACK QR.
  */
 
 (function () {
@@ -101,9 +101,6 @@
         } catch (e) {}
     }
 
-    /**
-     * Parse Totes input from textarea
-     */
     function getParsedTotesFromInput() {
         const text = elements.totesInput ? elements.totesInput.value.trim() : '';
         if (!text) return [];
@@ -112,7 +109,7 @@
             .split('\n')
             .map(line => line.trim())
             .filter(line => line.length > 0)
-            .slice(0, 100); // cap at 100
+            .slice(0, 100);
     }
 
     function updateInputCount() {
@@ -122,9 +119,6 @@
         }
     }
 
-    /**
-     * Generate 100 sample Tote barcodes
-     */
     function generate100SampleTotes() {
         const samples = [];
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -148,13 +142,9 @@
     // QR BROADCAST ENGINE
     // =========================================================================
 
-    /**
-     * Prepare dataset, pre-render QR frames, and switch to broadcast screen
-     */
     function startBroadcast() {
         let totes = getParsedTotesFromInput();
         if (totes.length === 0) {
-            // Auto-generate if empty
             generate100SampleTotes();
             totes = getParsedTotesFromInput();
         }
@@ -162,7 +152,6 @@
         state.rawTotes = totes;
         const total = totes.length;
 
-        // Build tsX-tote and tsX-tote-last strings
         state.codes = [];
         state.qrCanvases = [];
         state.activeIndices = [];
@@ -174,7 +163,6 @@
             state.codes.push(formatted);
             state.activeIndices.push(i);
 
-            // Pre-render QR canvas synchronously
             const canvas = document.createElement('canvas');
             if (window.QRCodeLib && window.QRCodeLib.drawToCanvas) {
                 window.QRCodeLib.drawToCanvas(canvas, formatted, {
@@ -189,7 +177,6 @@
 
         state.currentIndexInActive = 0;
 
-        // Switch to broadcast screen
         if (elements.inputScreen) elements.inputScreen.style.display = 'none';
         if (elements.broadcastScreen) elements.broadcastScreen.style.display = 'block';
 
@@ -209,9 +196,6 @@
         if (elements.inputScreen) elements.inputScreen.style.display = 'block';
     }
 
-    /**
-     * Render the active frame onto the visible canvas
-     */
     function renderCurrentFrame() {
         if (!elements.broadcastCanvas || state.qrCanvases.length === 0) return;
 
@@ -261,10 +245,6 @@
         highlightActiveMatrixCell(realIndex);
     }
 
-    /**
-     * Advance to the next frame in the active queue.
-     * When looping past the end, automatically skips ACK'd items!
-     */
     function stepNext() {
         if (state.activeIndices.length === 0) return;
         state.currentIndexInActive = (state.currentIndexInActive + 1) % state.activeIndices.length;
@@ -392,9 +372,6 @@
         if (elements.statAck) elements.statAck.textContent = state.ackSet.size;
     }
 
-    /**
-     * Process client ACK payload and drop acknowledged items from loop
-     */
     function processClientAck(ackList) {
         if (!Array.isArray(ackList) || ackList.length === 0) return;
 
@@ -413,7 +390,7 @@
         if (newAcks > 0) {
             playAckChime();
 
-            // Reconstruct activeIndices excluding all acknowledged ones
+            // Reconstruct active queue omitting all acknowledged items
             state.activeIndices = [];
             for (let i = 0; i < total; i++) {
                 if (!state.ackSet.has(i)) {
@@ -429,13 +406,30 @@
             updateStatsUI();
             renderCurrentFrame();
 
-            showToast(`Received ACK! Dropped ${newAcks} Totes. Remaining in loop: ${state.activeIndices.length}`, 'success');
+            showToast(`ACK: Dropped ${newAcks} Totes. Remaining in loop: ${state.activeIndices.length}`, 'success');
         }
     }
 
     // =========================================================================
-    // WEBCAM SCANNER (FRONT-FACING CAMERA DEFAULT)
+    // WEBCAM SCANNER & HEX BITSET DECODER
     // =========================================================================
+
+    /**
+     * Decode 25-character Hex Bitset string into array of integer indices
+     */
+    function decodeAckHexBitset(hexStr) {
+        const indices = [];
+        for (let nib = 0; nib < hexStr.length; nib++) {
+            const val = parseInt(hexStr[nib], 16);
+            if (isNaN(val)) continue;
+            for (let b = 0; b < 4; b++) {
+                if ((val & (1 << b)) !== 0) {
+                    indices.push(nib * 4 + b);
+                }
+            }
+        }
+        return indices;
+    }
 
     async function stopWebcam() {
         if (state.camScanInterval) {
@@ -475,7 +469,6 @@
         if (elements.webcamStatusText) elements.webcamStatusText.textContent = 'Starting webcam...';
 
         try {
-            // Default to front-facing camera ("user")
             const constraints = {
                 audio: false,
                 video: {
@@ -537,7 +530,7 @@
             if (!state.isCamActive || !elements.webcamVideo) return;
             if (elements.webcamVideo.readyState < 2) return;
 
-            // 1. Try native BarcodeDetector
+            // 1. BarcodeDetector
             if (state.camDetector) {
                 try {
                     const barcodes = await state.camDetector.detect(elements.webcamVideo);
@@ -548,7 +541,7 @@
                 } catch (e) {}
             }
 
-            // 2. Fallback to jsQR
+            // 2. jsQR
             if (typeof jsQR !== 'undefined') {
                 scanCanvas.width = elements.webcamVideo.videoWidth || 320;
                 scanCanvas.height = elements.webcamVideo.videoHeight || 240;
@@ -559,22 +552,27 @@
                     handleAckQrRawText(qrCode.data);
                 }
             }
-        }, 180);
+        }, 150);
     }
 
     /**
-     * Parse ACK QR code text
-     * Supported formats:
-     * - "ACK:0,1,2,3,4,5..."
-     * - "ACK_RANGES:0-15,18,22-50"
-     * - JSON {"ack":[0,1,2...]}
+     * Decode incoming client ACK QR payload
+     * Supports:
+     * 1. Constant Hex Bitset: "ACK:H:F0A1B2..."
+     * 2. Comma List: "ACK:0,1,2,3..."
+     * 3. Range String: "ACK_RANGES:0-10,15,20-40"
+     * 4. JSON: {"ack":[0,1,2...]}
      */
     function handleAckQrRawText(text) {
         if (!text || typeof text !== 'string') return;
         text = text.trim();
 
         try {
-            if (text.startsWith('ACK:')) {
+            if (text.startsWith('ACK:H:')) {
+                const hexStr = text.substring(6);
+                const indices = decodeAckHexBitset(hexStr);
+                processClientAck(indices);
+            } else if (text.startsWith('ACK:')) {
                 const parts = text.substring(4).split(',').map(n => parseInt(n.trim(), 10)).filter(n => !isNaN(n));
                 processClientAck(parts);
             } else if (text.startsWith('ACK_RANGES:')) {
@@ -597,7 +595,7 @@
                 }
             }
         } catch (e) {
-            console.warn('ACK parse error:', e);
+            console.warn('ACK decode error:', e);
         }
     }
 
@@ -623,7 +621,7 @@
     }
 
     // =========================================================================
-    // EVENT LISTENERS & INITIALIZATION
+    // INITIALIZATION
     // =========================================================================
 
     function bindEvents() {

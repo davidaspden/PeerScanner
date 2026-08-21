@@ -22,92 +22,88 @@
     </nav>
 
     <!-- Main Container -->
-    <main class="page-container">
+    <main class="page-container receiver-page-container">
         <!-- ================================================================
-             RECEIVER VIEW: CAMERA + ACK QR + 100-CELL GRID
+             RECEIVER VIEW: PINNED TOP (CAM + ACK QR) + SCROLLABLE GRID
              ================================================================ -->
-        <section id="receiverSection" class="receiver-section">
-            <header class="page-header">
-                <h1>Optical QR Stream Receiver</h1>
-                <p class="subtitle">Aim front camera at host stream. Show ACK QR to host webcam to drop captured frames.</p>
-            </header>
-
-            <div class="client-layout">
-                <!-- Column 1: Front Camera Viewfinder -->
-                <div class="card client-cam-card">
-                    <div class="section-title-row">
-                        <h3>Front Camera Viewfinder</h3>
-                        <button id="flipClientCamBtn" class="btn btn-secondary btn-sm">🔄 Flip Camera</button>
-                    </div>
-
-                    <div class="camera-stream-box" id="cameraBox">
-                        <video id="clientVideo" playsinline></video>
-                        <canvas id="clientScanCanvas" style="display: none;"></canvas>
+        <section id="receiverSection" class="receiver-section-layout">
+            
+            <!-- STICKY TOP ROW: Camera & ACK QR Code (Always Visible) -->
+            <div class="sticky-top-panel card">
+                <div class="top-panel-grid">
+                    <!-- Left: Camera Viewfinder (Front Camera Default) -->
+                    <div class="cam-panel-column">
+                        <div class="section-title-row">
+                            <span class="panel-tag">📷 Front Camera</span>
+                            <button id="flipClientCamBtn" class="btn btn-secondary btn-sm" title="Flip to rear camera">🔄 Flip</button>
+                        </div>
                         
-                        <!-- Viewfinder Reticle -->
-                        <div class="grab-scanner-overlay">
-                            <div class="grab-scan-box" id="clientScanBox">
-                                <div class="grab-scan-laser"></div>
+                        <div class="camera-stream-box" id="cameraBox">
+                            <video id="clientVideo" playsinline></video>
+                            <canvas id="clientScanCanvas" style="display: none;"></canvas>
+                            
+                            <!-- Reticle Overlay -->
+                            <div class="grab-scanner-overlay">
+                                <div class="grab-scan-box" id="clientScanBox">
+                                    <div class="grab-scan-laser"></div>
+                                </div>
+                            </div>
+
+                            <!-- Camera Loading Overlay -->
+                            <div id="camLoading" class="camera-loading-overlay">
+                                <div class="spinner"></div>
+                                <p id="camLoadingText">Starting front camera...</p>
                             </div>
                         </div>
-
-                        <!-- Camera Loading Overlay -->
-                        <div id="camLoading" class="camera-loading-overlay">
-                            <div class="spinner"></div>
-                            <p id="camLoadingText">Starting front-facing camera...</p>
-                        </div>
                     </div>
 
-                    <!-- Last Captured Item Banner -->
-                    <div class="last-grabbed-banner">
-                        <span class="grab-label">Last Captured:</span>
-                        <span id="lastCapturedCode" class="grab-value">Aim at host screen...</span>
-                    </div>
-
-                    <!-- Progress Header -->
-                    <div class="progress-header">
-                        <div class="progress-stat-row">
-                            <span class="progress-title">Captured: <span id="capturedCountText" class="highlight-text">0</span> / <span id="targetTotalText">100</span></span>
-                            <span class="progress-percentage" id="progressPercentText">0%</span>
-                        </div>
-                        <div class="progress-bar-track">
-                            <div class="progress-bar-fill" id="progressBarFill" style="width: 0%;"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Column 2: Live ACK QR Code & 100-Block Grid -->
-                <div class="card client-ack-card">
-                    <!-- Live ACK QR Code -->
-                    <div class="ack-qr-container">
+                    <!-- Right: Static Fixed-Size ACK QR Code (Always Visible) -->
+                    <div class="ack-panel-column">
                         <div class="section-title-row">
-                            <h3>Live Client ACK QR</h3>
-                            <span class="badge ack-count-badge" id="ackCountBadge">0 ACK'd</span>
+                            <span class="panel-tag">⚡ Live ACK QR</span>
+                            <span class="badge ack-count-badge" id="ackCountBadge">0 / 100</span>
                         </div>
-                        <p class="section-desc">Host webcam scans this to omit parsed frames from loop.</p>
                         
-                        <div class="ack-canvas-wrapper">
-                            <canvas id="ackCanvas" width="200" height="200"></canvas>
+                        <div class="ack-canvas-box">
+                            <canvas id="ackCanvas" width="180" height="180"></canvas>
                         </div>
-                    </div>
-
-                    <!-- 100-Cell Progress Matrix -->
-                    <div class="chunked-progress-section">
-                        <div class="section-title-row">
-                            <h3>100-Square Progress Grid</h3>
-                            <span class="matrix-legend">
-                                <span class="legend-dot ack"></span> Captured
-                                <span class="legend-dot missing"></span> Missing
-                            </span>
-                        </div>
-                        <div class="chunked-progress-grid compact-grid" id="clientGrid"></div>
+                        <div class="ack-helper-text">Point this at host webcam</div>
                     </div>
                 </div>
+
+                <!-- Last Captured Code Banner -->
+                <div class="last-grabbed-banner">
+                    <span class="grab-label">Last:</span>
+                    <span id="lastCapturedCode" class="grab-value">Aim front camera at host stream...</span>
+                </div>
+
+                <!-- Overall Progress Bar -->
+                <div class="progress-bar-container">
+                    <div class="progress-stat-row">
+                        <span class="progress-title">Captured: <span id="capturedCountText" class="highlight-text">0</span> / <span id="targetTotalText">100</span></span>
+                        <span class="progress-percentage" id="progressPercentText">0%</span>
+                    </div>
+                    <div class="progress-bar-track">
+                        <div class="progress-bar-fill" id="progressBarFill" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SCROLLABLE BOTTOM SECTION: 100-Square Pattern & Details -->
+            <div class="scrollable-content-panel card">
+                <div class="section-title-row">
+                    <h3>100-Square Progress Pattern</h3>
+                    <span class="matrix-legend">
+                        <span class="legend-dot ack"></span> Captured
+                        <span class="legend-dot missing"></span> Missing
+                    </span>
+                </div>
+                <div class="chunked-progress-grid compact-grid" id="clientGrid"></div>
             </div>
         </section>
 
         <!-- ================================================================
-             RESULTS SCREEN (UPON COMPLETING ALL 100 ITEMS)
+             RESULTS SCREEN (UPON COMPLETION)
              ================================================================ -->
         <section id="resultsSection" class="results-section" style="display: none;">
             <header class="page-header">
