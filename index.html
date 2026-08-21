@@ -71,9 +71,10 @@
 
                 <!-- Persistent Speed Controller -->
                 <div class="speed-control-group">
-                    <label for="broadcastSpeedSlider">
-                        Broadcast Speed: <span id="broadcastFpsDisplay" class="highlight-text">10 FPS</span> (<span id="broadcastIntervalDisplay">100ms</span>/frame)
-                    </label>
+                    <div class="speed-label-row">
+                        <span class="speed-title">Broadcast Speed:</span>
+                        <span class="speed-badge"><strong id="broadcastFpsDisplay">10 FPS</strong> (<span id="broadcastIntervalDisplay">100ms</span>/frame)</span>
+                    </div>
                     <input type="range" id="broadcastSpeedSlider" min="1" max="20" value="10" class="slider-input">
                 </div>
 
@@ -102,9 +103,8 @@
                 </div>
 
                 <div class="top-bar-speed-group">
-                    <label for="liveSpeedSlider">
-                        Speed: <span id="liveFpsDisplay" class="highlight-text">10 FPS</span> (<span id="liveIntervalDisplay">100ms</span>)
-                    </label>
+                    <span class="speed-title">Speed:</span>
+                    <span class="speed-badge"><strong id="liveFpsDisplay">10 FPS</strong> (<span id="liveIntervalDisplay">100ms</span>)</span>
                     <input type="range" id="liveSpeedSlider" min="1" max="20" value="10" class="slider-input">
                 </div>
 
