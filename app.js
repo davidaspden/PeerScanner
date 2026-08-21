@@ -210,12 +210,12 @@
     function updateInputCount() {
         const count = getParsedTotesFromInput().length;
         if (elements.toteCountBadge) {
-            elements.toteCountBadge.textContent = `${count} Tote${count === 1 ? '' : 's'} entered`;
+            elements.toteCountBadge.textContent = `${count} Barcode${count === 1 ? '' : 's'} entered`;
         }
     }
 
     /**
-     * Generate 100 sample Totes
+     * Generate 100 sample Barcodes
      */
     function generate100SampleTotes() {
         const samples = [];
@@ -226,14 +226,14 @@
                 randStr += chars.charAt(Math.floor(Math.random() * chars.length));
             }
             const padded = String(i).padStart(3, '0');
-            samples.push(`TOTE_${padded}_${randStr}`);
+            samples.push(`BC_${padded}_${randStr}`);
         }
 
         if (elements.totesInput) {
             elements.totesInput.value = samples.join('\n');
             updateInputCount();
         }
-        showToast('Generated 100 sample Totes!', 'info');
+        showToast('Generated 100 sample barcodes!', 'info');
     }
 
     // =========================================================================
@@ -285,7 +285,7 @@
         renderCurrentFrame();
         startPlayback();
 
-        showToast(`Broadcasting ${total} Totes (${state.broadcastMode === 'multicast' ? 'Group Multicast' : '1-to-1 Handshake'})`, 'success');
+        showToast(`Broadcasting ${total} Barcodes (${state.broadcastMode === 'multicast' ? 'Group Multicast' : '1-to-1 Handshake'})`, 'success');
     }
 
     function restartBroadcast() {
@@ -314,7 +314,7 @@
             ctx.fillStyle = '#10b981';
             ctx.font = 'bold 24px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('All Totes Delivered! 🎉', 230, 210);
+            ctx.fillText('All Barcodes Delivered! 🎉', 230, 210);
             ctx.fillStyle = '#64748b';
             ctx.font = '16px sans-serif';
             ctx.fillText('Client acknowledged 100%', 230, 250);
@@ -467,7 +467,7 @@
             const cell = document.createElement('div');
             cell.className = 'matrix-cell active';
             cell.id = `hostMatrixCell_${i}`;
-            cell.title = `Tote #${i + 1}: ${state.rawTotes[i] || ''} (Click to view QR)`;
+            cell.title = `Barcode #${i + 1}: ${state.rawTotes[i] || ''} (Click to view QR)`;
             cell.textContent = `${i}`;
 
             cell.addEventListener('click', () => {
@@ -568,7 +568,7 @@
                 updateStatsUI();
                 renderCurrentFrame();
 
-                showToast(`1-to-1 ACK: Dropped ${newAcks} Totes. Remaining: ${state.activeIndices.length}`, 'success');
+                showToast(`1-to-1 ACK: Dropped ${newAcks} barcodes. Remaining: ${state.activeIndices.length}`, 'success');
             }
         }
     }

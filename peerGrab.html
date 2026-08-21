@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PeerScanner - Optical QR Receiver (peerGrab)</title>
+    <title>PeerScanner - Optical Data Receiver</title>
     <link rel="stylesheet" href="styles.css">
     <script src="qrcode-lib.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
@@ -39,63 +39,55 @@
                 <button id="viewSplitBtn" class="btn btn-sm btn-primary" title="Show camera and ACK QR side by side">🔲 Split View</button>
                 <button id="viewMaxAckBtn" class="btn btn-sm btn-secondary" title="Maximize ACK QR for host webcam">⚡ Maximize ACK QR</button>
                 <button id="viewMaxCamBtn" class="btn btn-sm btn-secondary" title="Maximize Camera viewfinder">📷 Maximize Camera</button>
-                <button id="flipClientCamBtn" class="btn btn-sm btn-secondary" title="Flip front / rear camera">🔄 Flip</button>
+                <button id="clientFlipCamBtn" class="btn btn-sm btn-secondary" title="Switch between front and rear cameras">🔄 Flip Camera</button>
             </div>
 
-            <!-- DYNAMIC TOP PANELS (TAPPABLE TO MAXIMIZE) -->
-            <div class="sticky-top-panel card" id="interactiveTopPanel">
-                <div class="top-panel-grid" id="panelGridContainer">
-                    
-                    <!-- Camera Viewfinder (Tappable to maximize camera) -->
-                    <div class="cam-panel-column" id="camPanelCol">
+            <!-- STICKY TOP VIEW: CAMERA + LIVE ACK QR -->
+            <div class="sticky-top-panel card">
+                <div class="top-panel-grid mode-split" id="topPanelGrid">
+                    <!-- Column 1: Camera Viewfinder -->
+                    <div class="cam-panel-column" id="camPanelCol" title="Tap to maximize camera viewfinder">
                         <div class="panel-header-mini">
-                            <span class="panel-tag">📷 Front Camera (Tap to focus)</span>
+                            <span class="panel-tag">📷 Camera Viewfinder</span>
                         </div>
-                        
                         <div class="camera-stream-box" id="cameraBox">
-                            <video id="clientVideo" playsinline></video>
-                            <canvas id="clientScanCanvas" style="display: none;"></canvas>
-                            
-                            <!-- Reticle Overlay -->
+                            <video id="clientVideo" playsinline autoplay muted></video>
                             <div class="grab-scanner-overlay">
-                                <div class="grab-scan-box" id="clientScanBox">
+                                <div class="grab-scan-box" id="scanReticleBox">
                                     <div class="grab-scan-laser"></div>
                                 </div>
                             </div>
-
-                            <!-- Camera Loading Overlay -->
-                            <div id="camLoading" class="camera-loading-overlay">
+                            <div id="camLoadingOverlay" class="camera-loading-overlay">
                                 <div class="spinner"></div>
-                                <p id="camLoadingText">Starting front camera...</p>
+                                <span>Starting camera...</span>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Live ACK QR Code (Tappable to maximize ACK QR) -->
-                    <div class="ack-panel-column" id="ackPanelCol">
+                    <!-- Column 2: Live ACK QR Code -->
+                    <div class="ack-panel-column" id="ackPanelCol" title="Tap to maximize ACK QR code">
                         <div class="panel-header-mini">
-                            <span class="panel-tag">⚡ Live ACK QR (Tap to expand)</span>
-                            <span class="badge ack-count-badge" id="ackCountBadge">0 / 100</span>
+                            <span class="panel-tag">⚡ Live ACK QR</span>
+                            <span class="badge ack-count-badge" id="ackCountBadge">0 ACK'd</span>
                         </div>
-                        
                         <div class="ack-canvas-box" id="ackCanvasBox">
-                            <canvas id="ackCanvas" width="200" height="200"></canvas>
+                            <canvas id="ackCanvas" width="180" height="180"></canvas>
                         </div>
-                        <div class="ack-helper-text">Point at host webcam</div>
+                        <span class="ack-helper-text" id="ackHelperText">Point this at host webcam (1-to-1 mode)</span>
                     </div>
                 </div>
 
-                <!-- Last Captured Banner -->
-                <div class="last-grabbed-banner">
-                    <span class="grab-label">Last:</span>
-                    <span id="lastCapturedCode" class="grab-value">Aim front camera at host stream...</span>
+                <!-- Last Scanned Code Banner -->
+                <div class="last-grabbed-banner" id="lastGrabbedBanner">
+                    <span class="grab-label">Last Scanned:</span>
+                    <span class="grab-value" id="lastGrabbedDisplay">Waiting for QR frames...</span>
                 </div>
 
-                <!-- Overall Progress Bar -->
+                <!-- Live Numerical Progress -->
                 <div class="progress-bar-container">
                     <div class="progress-stat-row">
-                        <span class="progress-title">Captured: <span id="capturedCountText" class="highlight-text">0</span> / <span id="targetTotalText">100</span></span>
-                        <span class="progress-percentage" id="progressPercentText">0%</span>
+                        <span class="progress-title">Reconstruction Progress</span>
+                        <span class="progress-percentage" id="progressPercentage">0%</span>
                     </div>
                     <div class="progress-bar-track">
                         <div class="progress-bar-fill" id="progressBarFill" style="width: 0%;"></div>
@@ -103,10 +95,10 @@
                 </div>
             </div>
 
-            <!-- SCROLLABLE 100-SQUARE PROGRESS GRID -->
+            <!-- SCROLLABLE PROGRESS GRID -->
             <div class="scrollable-content-panel card">
                 <div class="section-title-row">
-                    <h3>100-Square Progress Pattern</h3>
+                    <h3>Progress Pattern</h3>
                     <span class="matrix-legend">
                         <span class="legend-dot ack"></span> Captured
                         <span class="legend-dot missing"></span> Missing
@@ -124,7 +116,7 @@
             <div class="card final-ack-card">
                 <div class="section-title-row">
                     <h2>Transfer Complete! 🎉</h2>
-                    <span class="results-total-badge" id="resultsTotalBadge">100 Totes Captured</span>
+                    <span class="results-total-badge" id="resultsTotalBadge">All Barcodes Captured</span>
                 </div>
                 <p class="section-desc">Point this completed ACK QR at the host webcam to confirm full receipt.</p>
                 
@@ -136,7 +128,7 @@
             <!-- Collapsible Scanned List Container -->
             <div class="card results-list-card" id="resultsListCard" style="display: none;">
                 <div class="section-title-row">
-                    <h3>Captured Totes Details</h3>
+                    <h3>Captured Barcodes Details</h3>
                 </div>
                 <div class="scanned-list" id="resultsList"></div>
             </div>

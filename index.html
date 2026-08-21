@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PeerScanner - Optical Tote Broadcaster</title>
+    <title>PeerScanner - Optical Data Broadcaster</title>
     <link rel="stylesheet" href="styles.css">
     <script src="qrcode-lib.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
@@ -25,12 +25,12 @@
     <!-- Main Application Container -->
     <main class="page-container host-page-container">
         <!-- ================================================================
-             SCREEN 1: TOTE INPUT & CONFIGURATION
+             SCREEN 1: DATA INPUT & CONFIGURATION
              ================================================================ -->
         <section id="inputScreen" class="input-screen-container">
             <header class="page-header">
-                <h1>Optical Tote Broadcaster</h1>
-                <p class="subtitle">Paste Totes / barcodes to broadcast optically. Choose 1-to-1 or Group Multicast mode.</p>
+                <h1>Optical Data Broadcaster</h1>
+                <p class="subtitle">Paste barcodes to broadcast optically. Choose 1-to-1 or Group Multicast mode.</p>
             </header>
 
             <div class="card input-card">
@@ -56,15 +56,15 @@
                 </div>
 
                 <div class="input-header-row">
-                    <label for="totesInput" class="input-label">Totes / Barcodes List (one per line):</label>
-                    <span id="toteCountBadge" class="count-badge">0 Totes entered</span>
+                    <label for="totesInput" class="input-label">Barcodes (1 per line):</label>
+                    <span id="toteCountBadge" class="count-badge">0 Barcodes entered</span>
                 </div>
 
-                <textarea id="totesInput" class="totes-textarea" rows="8" placeholder="Paste barcodes/Totes here (one per line)...&#10;Example:&#10;TOTE_894210&#10;TOTE_894211&#10;TOTE_894212"></textarea>
+                <textarea id="totesInput" class="totes-textarea" rows="8" placeholder="Paste barcodes here (1 per line)...&#10;Example:&#10;BC_894210&#10;BC_894211&#10;BC_894212"></textarea>
 
                 <!-- Action Buttons for Input -->
                 <div class="input-actions-row">
-                    <button id="generateSampleBtn" class="btn btn-secondary">⚡ Generate 100 Totes</button>
+                    <button id="generateSampleBtn" class="btn btn-secondary">⚡ Generate 100 Barcodes</button>
                     <button id="pasteClipboardBtn" class="btn btn-secondary">📋 Paste from Clipboard</button>
                     <button id="clearInputBtn" class="btn btn-secondary">🗑️ Clear</button>
                 </div>
@@ -146,7 +146,7 @@
                     <!-- Dynamic Stats Grid -->
                     <div class="stats-grid" id="statsGrid">
                         <div class="stat-box">
-                            <span class="stat-label">Total Totes</span>
+                            <span class="stat-label">Total Barcodes</span>
                             <span class="stat-value" id="statTotal">0</span>
                         </div>
                         <div class="stat-box">
@@ -181,7 +181,7 @@
                                 <button id="flipCamBtn" class="btn btn-secondary btn-sm" style="display: none;">🔄 Flip</button>
                             </div>
                         </div>
-                        <p class="section-desc" id="webcamDescText">Point webcam at client screen to drop acknowledged Totes.</p>
+                        <p class="section-desc" id="webcamDescText">Point webcam at client screen to drop acknowledged barcodes.</p>
                         
                         <div id="webcamContainer" class="feedback-cam-container" style="display: none;">
                             <video id="webcamVideo" playsinline></video>
