@@ -1,8 +1,8 @@
 /**
  * peerGrab.js - Client Optical QR Stream Receiver & Processor
- * Pinned camera & ACK QR code, 25-char Hex Bitset ACK encoding,
- * robust state preservation across multiple stream passes,
- * and responsive 100-cell progress grid.
+ * Pinned camera & ACK QR code, interactive tap-to-focus/maximize,
+ * live 25-char Hex Bitset ACK encoding, completed screen with full ACK QR,
+ * and fixed bottom toolbar for Copy, Export, and Toggle List.
  */
 
 (function () {
@@ -15,6 +15,8 @@
         totalCount: DEFAULT_TOTAL,
         hasReceivedLastMarker: false,
         receivedMap: new Map(), // index -> { index, tote, rawCode, timestamp }
+        viewMode: 'split', // 'split' | 'max-ack' | 'max-cam'
+        isListVisible: false,
         isScanning: false,
         currentFacingMode: 'user', // Default to front-facing camera!
         camStream: null,
@@ -26,9 +28,24 @@
 
     // DOM Elements
     const elements = {
+        // Nav Badge
+        navFoundCount: document.getElementById('navFoundCount'),
+        navTotalCount: document.getElementById('navTotalCount'),
+        
         // Sections
         receiverSection: document.getElementById('receiverSection'),
         resultsSection: document.getElementById('resultsSection'),
+        
+        // View Mode Toolbar
+        viewSplitBtn: document.getElementById('viewSplitBtn'),
+        viewMaxAckBtn: document.getElementById('viewMaxAckBtn'),
+        viewMaxCamBtn: document.getElementById('viewMaxCamBtn'),
+        flipClientCamBtn: document.getElementById('flipClientCamBtn'),
+        
+        // Top Panels & Columns
+        panelGridContainer: document.getElementById('panelGridContainer'),
+        camPanelCol: document.getElementById('camPanelCol'),
+        ackPanelCol: document.getElementById('ackPanelCol'),
         
         // Camera
         cameraBox: document.getElementById('cameraBox'),
@@ -37,7 +54,6 @@
         clientScanBox: document.getElementById('clientScanBox'),
         camLoading: document.getElementById('camLoading'),
         camLoadingText: document.getElementById('camLoadingText'),
-        flipClientCamBtn: document.getElementById('flipClientCamBtn'),
         lastCapturedCode: document.getElementById('lastCapturedCode'),
         
         // Progress
@@ -51,11 +67,15 @@
         ackCanvas: document.getElementById('ackCanvas'),
         ackCountBadge: document.getElementById('ackCountBadge'),
         
-        // Results
+        // Results & Fixed Bottom Bar
+        finalAckCanvas: document.getElementById('finalAckCanvas'),
         resultsTotalBadge: document.getElementById('resultsTotalBadge'),
+        resultsListCard: document.getElementById('resultsListCard'),
         resultsList: document.getElementById('resultsList'),
+        fixedBottomBar: document.getElementById('fixedBottomBar'),
         exportJsonBtn: document.getElementById('exportJsonBtn'),
         copyAllBtn: document.getElementById('copyAllBtn'),
+        toggleListBtn: document.getElementById('toggleListBtn'),
         scanAgainBtn: document.getElementById('scanAgainBtn')
     };
 
@@ -86,9 +106,50 @@
         } catch (e) {}
     }
 
-    /**
-     * Build the 100-cell progress grid and apply existing state
-     */
+    // =========================================================================
+    // VIEW MODE MANAGEMENT (SPLIT / MAX QR / MAX CAMERA)
+    // =========================================================================
+
+    function setViewMode(mode) {
+        state.viewMode = mode;
+
+        if (elements.panelGridContainer) {
+            elements.panelGridContainer.classList.remove('mode-split', 'mode-max-ack', 'mode-max-cam');
+            elements.panelGridContainer.classList.add(`mode-${mode}`);
+        }
+
+        // Update button states
+        const btnMap = {
+            'split': elements.viewSplitBtn,
+            'max-ack': elements.viewMaxAckBtn,
+            'max-cam': elements.viewMaxCamBtn
+        };
+
+        Object.keys(btnMap).forEach(k => {
+            const btn = btnMap[k];
+            if (!btn) return;
+            if (k === mode) {
+                btn.classList.remove('btn-secondary');
+                btn.classList.add('btn-primary');
+            } else {
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+            }
+        });
+    }
+
+    function toggleMaximizePanel(target) {
+        if (state.viewMode === target) {
+            setViewMode('split');
+        } else {
+            setViewMode(target);
+        }
+    }
+
+    // =========================================================================
+    // GRID & TOTALS
+    // =========================================================================
+
     function buildGridDOM() {
         if (!elements.clientGrid) return;
         elements.clientGrid.innerHTML = '';
@@ -110,13 +171,14 @@
         state.hasReceivedLastMarker = true;
 
         if (elements.targetTotalText) elements.targetTotalText.textContent = count;
+        if (elements.navTotalCount) elements.navTotalCount.textContent = count;
         buildGridDOM();
         updateProgressUI();
         updateAckQRCode();
     }
 
     // =========================================================================
-    // CAMERA CONTROLS (FRONT-FACING CAMERA DEFAULT & CLEAN DESTRUCTION)
+    // CAMERA CONTROLS
     // =========================================================================
 
     async function stopCamera() {
@@ -188,7 +250,7 @@
     }
 
     // =========================================================================
-    // QR CODE SCANNING LOOP
+    // SCANNING LOOP
     // =========================================================================
 
     function startScanLoop() {
@@ -232,9 +294,6 @@
         }, 60);
     }
 
-    /**
-     * Parse detected QR code string: ts<index>-<tote>(-last)?
-     */
     function processDetectedQrCode(text) {
         if (!text || typeof text !== 'string' || state.isComplete) return;
         text = text.trim();
@@ -246,15 +305,12 @@
         const rawTote = match[2];
         const isLast = Boolean(match[3]);
 
-        // Lock total when -last is detected
         if (isLast && !state.hasReceivedLastMarker) {
             setTargetTotal(index + 1);
         }
 
-        // Ignore if already captured
         if (state.receivedMap.has(index)) return;
 
-        // Store new chunk
         const now = new Date().toISOString();
         state.receivedMap.set(index, {
             index: index,
@@ -263,7 +319,6 @@
             timestamp: now
         });
 
-        // Chirp sound and viewfinder flash
         playChirp();
         if (elements.clientScanBox) {
             elements.clientScanBox.classList.add('success');
@@ -276,7 +331,6 @@
             elements.lastCapturedCode.textContent = `[#${index + 1}] ${rawTote}`;
         }
 
-        // Update block in grid
         const block = document.getElementById(`clientBlock_${index}`);
         if (block) {
             block.className = 'chunk-block ack just-added';
@@ -289,7 +343,6 @@
         updateProgressUI();
         queueAckQrUpdate();
 
-        // Check if all chunks received
         if (state.receivedMap.size >= state.totalCount) {
             onAllTotesCollected();
         }
@@ -302,22 +355,19 @@
 
         if (elements.capturedCountText) elements.capturedCountText.textContent = count;
         if (elements.targetTotalText) elements.targetTotalText.textContent = total;
+        if (elements.navFoundCount) elements.navFoundCount.textContent = count;
+        if (elements.navTotalCount) elements.navTotalCount.textContent = total;
         if (elements.progressPercentText) elements.progressPercentText.textContent = `${percent}%`;
         if (elements.progressBarFill) elements.progressBarFill.style.width = `${percent}%`;
     }
 
     // =========================================================================
-    // CONSTANT-SIZE 25-CHAR HEX BITSET ACK QR GENERATOR
+    // HEX BITSET ACK QR GENERATOR
     // =========================================================================
 
-    /**
-     * Encode 100 binary state flags as a static 25-character Hex Bitset string
-     * e.g. "ACK:H:3F00000000000000000000000"
-     * Produces a fixed Version 2 QR code with large high-contrast modules!
-     */
     function encodeAckHexBitset(receivedSet, total = 100) {
         let hex = '';
-        const numNibbles = Math.ceil(total / 4); // 25 nibbles for 100 items
+        const numNibbles = Math.ceil(total / 4);
         for (let nib = 0; nib < numNibbles; nib++) {
             let val = 0;
             for (let b = 0; b < 4; b++) {
@@ -349,33 +399,29 @@
         if (count === 0) {
             const ctx = elements.ackCanvas.getContext('2d');
             ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, 180, 180);
+            ctx.fillRect(0, 0, 200, 200);
             ctx.fillStyle = '#64748b';
             ctx.font = 'bold 13px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('Awaiting scans...', 90, 95);
+            ctx.fillText('Awaiting scans...', 100, 105);
             return;
         }
 
-        // Constant 25-character Hex payload
         const payload = encodeAckHexBitset(state.receivedMap, state.totalCount);
 
         if (window.QRCodeLib && window.QRCodeLib.drawToCanvas) {
             try {
-                // Fixed Version 2 QR Code: 25x25 modules, giant chunky pixels, instant scan!
                 window.QRCodeLib.drawToCanvas(elements.ackCanvas, payload, {
                     typeNumber: 2,
-                    width: 180,
-                    height: 180,
+                    width: 200,
+                    height: 200,
                     margin: 1,
                     errorCorrectionLevel: 'L'
                 });
             } catch (e) {
-                console.warn('ACK QR rendering fallback:', e);
-                // Fallback to auto typeNumber
                 window.QRCodeLib.drawToCanvas(elements.ackCanvas, payload, {
-                    width: 180,
-                    height: 180,
+                    width: 200,
+                    height: 200,
                     margin: 1,
                     errorCorrectionLevel: 'L'
                 });
@@ -393,11 +439,29 @@
 
         await stopCamera();
 
+        // Switch to Results Screen
         if (elements.receiverSection) elements.receiverSection.style.display = 'none';
         if (elements.resultsSection) elements.resultsSection.style.display = 'block';
+        if (elements.fixedBottomBar) elements.fixedBottomBar.style.display = 'block';
 
         if (elements.resultsTotalBadge) {
             elements.resultsTotalBadge.textContent = `${state.totalCount} Totes Received`;
+        }
+
+        // Draw Full Completed ACK QR at top of results screen
+        if (elements.finalAckCanvas && window.QRCodeLib && window.QRCodeLib.drawToCanvas) {
+            const finalPayload = encodeAckHexBitset(state.receivedMap, state.totalCount);
+            try {
+                window.QRCodeLib.drawToCanvas(elements.finalAckCanvas, finalPayload, {
+                    typeNumber: 2,
+                    width: 220,
+                    height: 220,
+                    margin: 1,
+                    errorCorrectionLevel: 'L'
+                });
+            } catch (e) {
+                console.warn('Final ACK QR error:', e);
+            }
         }
 
         renderResultsList();
@@ -440,6 +504,16 @@
                 }
             });
         });
+    }
+
+    function toggleListVisibility() {
+        state.isListVisible = !state.isListVisible;
+        if (elements.resultsListCard) {
+            elements.resultsListCard.style.display = state.isListVisible ? 'block' : 'none';
+        }
+        if (elements.toggleListBtn) {
+            elements.toggleListBtn.textContent = state.isListVisible ? '🙈 Hide List' : '📜 Show List';
+        }
     }
 
     function exportJSON() {
@@ -489,14 +563,18 @@
         state.isComplete = false;
         state.hasReceivedLastMarker = false;
         state.receivedMap.clear();
+        state.isListVisible = false;
         
         buildGridDOM();
         updateProgressUI();
         updateAckQRCode();
 
         if (elements.resultsSection) elements.resultsSection.style.display = 'none';
+        if (elements.resultsListCard) elements.resultsListCard.style.display = 'none';
+        if (elements.fixedBottomBar) elements.fixedBottomBar.style.display = 'none';
         if (elements.receiverSection) elements.receiverSection.style.display = 'block';
 
+        setViewMode('split');
         startCamera();
     }
 
@@ -531,25 +609,34 @@
     }
 
     // =========================================================================
-    // INITIALIZATION
+    // INITIALIZATION & BINDINGS
     // =========================================================================
 
     function bindEvents() {
-        if (elements.flipClientCamBtn) {
-            elements.flipClientCamBtn.addEventListener('click', flipCamera);
+        // View Mode Buttons
+        if (elements.viewSplitBtn) elements.viewSplitBtn.addEventListener('click', () => setViewMode('split'));
+        if (elements.viewMaxAckBtn) elements.viewMaxAckBtn.addEventListener('click', () => setViewMode('max-ack'));
+        if (elements.viewMaxCamBtn) elements.viewMaxCamBtn.addEventListener('click', () => setViewMode('max-cam'));
+        if (elements.flipClientCamBtn) elements.flipClientCamBtn.addEventListener('click', flipCamera);
+
+        // Tap on panels directly to toggle focus
+        if (elements.ackPanelCol) {
+            elements.ackPanelCol.addEventListener('click', (e) => {
+                toggleMaximizePanel('max-ack');
+            });
         }
 
-        if (elements.exportJsonBtn) {
-            elements.exportJsonBtn.addEventListener('click', exportJSON);
+        if (elements.camPanelCol) {
+            elements.camPanelCol.addEventListener('click', (e) => {
+                toggleMaximizePanel('max-cam');
+            });
         }
 
-        if (elements.copyAllBtn) {
-            elements.copyAllBtn.addEventListener('click', copyAllToClipboard);
-        }
-
-        if (elements.scanAgainBtn) {
-            elements.scanAgainBtn.addEventListener('click', resetAndScanAgain);
-        }
+        // Results Bottom Bar Buttons
+        if (elements.exportJsonBtn) elements.exportJsonBtn.addEventListener('click', exportJSON);
+        if (elements.copyAllBtn) elements.copyAllBtn.addEventListener('click', copyAllToClipboard);
+        if (elements.toggleListBtn) elements.toggleListBtn.addEventListener('click', toggleListVisibility);
+        if (elements.scanAgainBtn) elements.scanAgainBtn.addEventListener('click', resetAndScanAgain);
 
         window.addEventListener('beforeunload', () => {
             stopCamera();
@@ -559,6 +646,7 @@
     function init() {
         buildGridDOM();
         bindEvents();
+        setViewMode('split');
         startCamera();
     }
 

@@ -8,34 +8,48 @@
     <script src="qrcode-lib.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
-<body class="page-body">
+<body class="page-body receiver-body">
     <!-- Top Navigation Bar -->
     <nav class="top-nav">
         <div class="nav-brand">
             <span class="nav-logo">📦⚡</span>
             <span class="nav-title">PeerScanner</span>
         </div>
+        <div class="nav-center-badge">
+            <div class="found-total-pill">
+                <span class="pill-label">Found:</span>
+                <span class="pill-value" id="navFoundCount">0</span> / <span id="navTotalCount">100</span>
+            </div>
+        </div>
         <div class="nav-links">
-            <a href="index.html" class="nav-link">Host Broadcaster (Totes)</a>
-            <a href="peerGrab.html" class="nav-link active">Client Receiver (peerGrab)</a>
+            <a href="index.html" class="nav-link">Host Broadcaster</a>
+            <a href="peerGrab.html" class="nav-link active">Receiver</a>
         </div>
     </nav>
 
     <!-- Main Container -->
     <main class="page-container receiver-page-container">
         <!-- ================================================================
-             RECEIVER VIEW: PINNED TOP (CAM + ACK QR) + SCROLLABLE GRID
+             RECEIVER VIEW: INTERACTIVE CAMERA & ACK QR PANELS + GRID
              ================================================================ -->
         <section id="receiverSection" class="receiver-section-layout">
             
-            <!-- STICKY TOP ROW: Camera & ACK QR Code (Always Visible) -->
-            <div class="sticky-top-panel card">
-                <div class="top-panel-grid">
-                    <!-- Left: Camera Viewfinder (Front Camera Default) -->
-                    <div class="cam-panel-column">
-                        <div class="section-title-row">
-                            <span class="panel-tag">📷 Front Camera</span>
-                            <button id="flipClientCamBtn" class="btn btn-secondary btn-sm" title="Flip to rear camera">🔄 Flip</button>
+            <!-- VIEW MODE TOGGLES (SPLIT / MAX QR / MAX CAMERA) -->
+            <div class="view-mode-toolbar">
+                <button id="viewSplitBtn" class="btn btn-sm btn-primary" title="Show camera and ACK QR side by side">🔲 Split View</button>
+                <button id="viewMaxAckBtn" class="btn btn-sm btn-secondary" title="Maximize ACK QR for host webcam">⚡ Maximize ACK QR</button>
+                <button id="viewMaxCamBtn" class="btn btn-sm btn-secondary" title="Maximize Camera viewfinder">📷 Maximize Camera</button>
+                <button id="flipClientCamBtn" class="btn btn-sm btn-secondary" title="Flip front / rear camera">🔄 Flip</button>
+            </div>
+
+            <!-- DYNAMIC TOP PANELS (TAPPABLE TO MAXIMIZE) -->
+            <div class="sticky-top-panel card" id="interactiveTopPanel">
+                <div class="top-panel-grid" id="panelGridContainer">
+                    
+                    <!-- Camera Viewfinder (Tappable to maximize camera) -->
+                    <div class="cam-panel-column" id="camPanelCol">
+                        <div class="panel-header-mini">
+                            <span class="panel-tag">📷 Front Camera (Tap to focus)</span>
                         </div>
                         
                         <div class="camera-stream-box" id="cameraBox">
@@ -57,21 +71,21 @@
                         </div>
                     </div>
 
-                    <!-- Right: Static Fixed-Size ACK QR Code (Always Visible) -->
-                    <div class="ack-panel-column">
-                        <div class="section-title-row">
-                            <span class="panel-tag">⚡ Live ACK QR</span>
+                    <!-- Live ACK QR Code (Tappable to maximize ACK QR) -->
+                    <div class="ack-panel-column" id="ackPanelCol">
+                        <div class="panel-header-mini">
+                            <span class="panel-tag">⚡ Live ACK QR (Tap to expand)</span>
                             <span class="badge ack-count-badge" id="ackCountBadge">0 / 100</span>
                         </div>
                         
-                        <div class="ack-canvas-box">
-                            <canvas id="ackCanvas" width="180" height="180"></canvas>
+                        <div class="ack-canvas-box" id="ackCanvasBox">
+                            <canvas id="ackCanvas" width="200" height="200"></canvas>
                         </div>
-                        <div class="ack-helper-text">Point this at host webcam</div>
+                        <div class="ack-helper-text">Point at host webcam</div>
                     </div>
                 </div>
 
-                <!-- Last Captured Code Banner -->
+                <!-- Last Captured Banner -->
                 <div class="last-grabbed-banner">
                     <span class="grab-label">Last:</span>
                     <span id="lastCapturedCode" class="grab-value">Aim front camera at host stream...</span>
@@ -89,7 +103,7 @@
                 </div>
             </div>
 
-            <!-- SCROLLABLE BOTTOM SECTION: 100-Square Pattern & Details -->
+            <!-- SCROLLABLE 100-SQUARE PROGRESS GRID -->
             <div class="scrollable-content-panel card">
                 <div class="section-title-row">
                     <h3>100-Square Progress Pattern</h3>
@@ -103,30 +117,43 @@
         </section>
 
         <!-- ================================================================
-             RESULTS SCREEN (UPON COMPLETION)
+             RESULTS SCREEN (WITH FULL COMPLETED ACK QR AT TOP)
              ================================================================ -->
         <section id="resultsSection" class="results-section" style="display: none;">
-            <header class="page-header">
-                <h1>Transfer Complete! 🎉</h1>
-                <p class="subtitle">All 100 Totes have been successfully received via optical transfer.</p>
-            </header>
-
-            <div class="card results-card">
-                <div class="results-toolbar">
-                    <div class="results-summary">
-                        <span class="results-total-badge" id="resultsTotalBadge">100 Totes Received</span>
-                    </div>
-                    <div class="results-actions">
-                        <button id="exportJsonBtn" class="btn btn-primary">💾 Export JSON</button>
-                        <button id="copyAllBtn" class="btn btn-secondary">📋 Copy All</button>
-                        <button id="scanAgainBtn" class="btn btn-secondary">🔄 Scan Another Batch</button>
-                    </div>
+            <!-- Top: Full Completed ACK QR Code -->
+            <div class="card final-ack-card">
+                <div class="section-title-row">
+                    <h2>Transfer Complete! 🎉</h2>
+                    <span class="results-total-badge" id="resultsTotalBadge">100 Totes Captured</span>
                 </div>
+                <p class="section-desc">Point this completed ACK QR at the host webcam to confirm full receipt.</p>
+                
+                <div class="final-ack-qr-container">
+                    <canvas id="finalAckCanvas" width="220" height="220"></canvas>
+                </div>
+            </div>
 
+            <!-- Collapsible Scanned List Container -->
+            <div class="card results-list-card" id="resultsListCard" style="display: none;">
+                <div class="section-title-row">
+                    <h3>Captured Totes Details</h3>
+                </div>
                 <div class="scanned-list" id="resultsList"></div>
             </div>
         </section>
     </main>
+
+    <!-- ====================================================================
+         FIXED BOTTOM ACTION BAR (RESULTS / ACTIVE CONTROLS)
+         ==================================================================== -->
+    <footer class="fixed-bottom-bar" id="fixedBottomBar" style="display: none;">
+        <div class="bottom-bar-inner">
+            <button id="copyAllBtn" class="btn btn-secondary btn-sm" title="Copy all Totes to clipboard">📋 Copy All</button>
+            <button id="exportJsonBtn" class="btn btn-primary btn-sm" title="Export as JSON file">💾 Export JSON</button>
+            <button id="toggleListBtn" class="btn btn-secondary btn-sm" title="Show or hide the detailed list of Totes">📜 Show List</button>
+            <button id="scanAgainBtn" class="btn btn-secondary btn-sm" title="Reset and scan a new batch">🔄 Reset</button>
+        </div>
+    </footer>
 
     <script src="peerGrab.js"></script>
 </body>

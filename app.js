@@ -1,8 +1,8 @@
 /**
  * app.js - Optical Tote Broadcaster & Controller (Host)
  * Accepts pasted Totes/barcodes, chunks into tsX-code items,
- * broadcasts animated QR codes at 10 FPS, skips ACK'd frames on loop,
- * and decodes client's constant 25-character Hex Bitset ACK QR.
+ * broadcasts animated QR codes at 10 FPS with persistent speed slider,
+ * restart capabilities, and dismissable mobile receiver QR modal.
  */
 
 (function () {
@@ -22,7 +22,7 @@
         
         // Webcam state
         isCamActive: false,
-        currentFacingMode: 'user', // default to front-facing camera!
+        currentFacingMode: 'user', // default to front-facing camera
         camStream: null,
         camDetector: null,
         camScanInterval: null
@@ -49,9 +49,11 @@
         broadcastCanvas: document.getElementById('broadcastCanvas'),
         frameIndexDisplay: document.getElementById('frameIndexDisplay'),
         frameCodeDisplay: document.getElementById('frameCodeDisplay'),
+        inLoopBadge: document.getElementById('inLoopBadge'),
         playPauseBtn: document.getElementById('playPauseBtn'),
         playPauseIcon: document.getElementById('playPauseIcon'),
         playPauseText: document.getElementById('playPauseText'),
+        restartBroadcastBtn: document.getElementById('restartBroadcastBtn'),
         prevBtn: document.getElementById('prevBtn'),
         nextBtn: document.getElementById('nextBtn'),
         backToInputBtn: document.getElementById('backToInputBtn'),
@@ -71,7 +73,16 @@
         webcamContainer: document.getElementById('webcamContainer'),
         webcamVideo: document.getElementById('webcamVideo'),
         webcamCanvas: document.getElementById('webcamCanvas'),
-        webcamStatusText: document.getElementById('webcamStatusText')
+        webcamStatusText: document.getElementById('webcamStatusText'),
+
+        // Receiver Link Modal
+        showReceiverLinkBtn: document.getElementById('showReceiverLinkBtn'),
+        showReceiverModalLiveBtn: document.getElementById('showReceiverModalLiveBtn'),
+        receiverLinkModal: document.getElementById('receiverLinkModal'),
+        closeReceiverModalBtn: document.getElementById('closeReceiverModalBtn'),
+        dismissReceiverModalBtn: document.getElementById('dismissReceiverModalBtn'),
+        receiverLinkCanvas: document.getElementById('receiverLinkCanvas'),
+        receiverUrlLink: document.getElementById('receiverUrlLink')
     };
 
     // Synthesized sound on ACK
@@ -189,6 +200,15 @@
         showToast(`Broadcasting ${total} Totes at ${state.fps} FPS`, 'success');
     }
 
+    function restartBroadcast() {
+        state.currentIndexInActive = 0;
+        renderCurrentFrame();
+        if (!state.isPlaying) {
+            startPlayback();
+        }
+        showToast('Restarted stream loop from frame 1', 'info');
+    }
+
     function returnToInputScreen() {
         stopPlayback();
         stopWebcam();
@@ -212,6 +232,7 @@
             ctx.fillText('Client acknowledged 100%', 150, 175);
             if (elements.frameIndexDisplay) elements.frameIndexDisplay.textContent = 'All Items Delivered!';
             if (elements.frameCodeDisplay) elements.frameCodeDisplay.textContent = 'Broadcast Complete';
+            if (elements.inLoopBadge) elements.inLoopBadge.textContent = '0 in loop (Done)';
             return;
         }
 
@@ -240,6 +261,9 @@
         }
         if (elements.frameCodeDisplay) {
             elements.frameCodeDisplay.textContent = state.codes[realIndex] || '';
+        }
+        if (elements.inLoopBadge) {
+            elements.inLoopBadge.textContent = `${state.activeIndices.length} in loop`;
         }
 
         highlightActiveMatrixCell(realIndex);
@@ -406,7 +430,7 @@
             updateStatsUI();
             renderCurrentFrame();
 
-            showToast(`ACK: Dropped ${newAcks} Totes. Remaining in loop: ${state.activeIndices.length}`, 'success');
+            showToast(`ACK: Dropped ${newAcks} Totes. Remaining: ${state.activeIndices.length}`, 'success');
         }
     }
 
@@ -414,9 +438,6 @@
     // WEBCAM SCANNER & HEX BITSET DECODER
     // =========================================================================
 
-    /**
-     * Decode 25-character Hex Bitset string into array of integer indices
-     */
     function decodeAckHexBitset(hexStr) {
         const indices = [];
         for (let nib = 0; nib < hexStr.length; nib++) {
@@ -555,14 +576,6 @@
         }, 150);
     }
 
-    /**
-     * Decode incoming client ACK QR payload
-     * Supports:
-     * 1. Constant Hex Bitset: "ACK:H:F0A1B2..."
-     * 2. Comma List: "ACK:0,1,2,3..."
-     * 3. Range String: "ACK_RANGES:0-10,15,20-40"
-     * 4. JSON: {"ack":[0,1,2...]}
-     */
     function handleAckQrRawText(text) {
         if (!text || typeof text !== 'string') return;
         text = text.trim();
@@ -599,6 +612,51 @@
         }
     }
 
+    // =========================================================================
+    // RECEIVER LINK MODAL (SCAN WITH PHONE TO OPEN peerGrab)
+    // =========================================================================
+
+    function getReceiverFullUrl() {
+        const href = window.location.href;
+        if (href.includes('index.html')) {
+            return href.replace('index.html', 'peerGrab.html');
+        }
+        // Fallback for directory paths
+        const base = href.split('?')[0].split('#')[0];
+        return base.endsWith('/') ? `${base}peerGrab.html` : `${base}/peerGrab.html`;
+    }
+
+    function showReceiverLinkModal() {
+        if (!elements.receiverLinkModal) return;
+
+        const fullUrl = getReceiverFullUrl();
+        if (elements.receiverUrlLink) {
+            elements.receiverUrlLink.href = fullUrl;
+            elements.receiverUrlLink.textContent = fullUrl;
+        }
+
+        if (elements.receiverLinkCanvas && window.QRCodeLib && window.QRCodeLib.drawToCanvas) {
+            try {
+                window.QRCodeLib.drawToCanvas(elements.receiverLinkCanvas, fullUrl, {
+                    width: 200,
+                    height: 200,
+                    margin: 2,
+                    errorCorrectionLevel: 'M'
+                });
+            } catch (e) {
+                console.warn('Receiver link QR draw error:', e);
+            }
+        }
+
+        elements.receiverLinkModal.style.display = 'flex';
+    }
+
+    function hideReceiverLinkModal() {
+        if (elements.receiverLinkModal) {
+            elements.receiverLinkModal.style.display = 'none';
+        }
+    }
+
     function showToast(message, type = 'info', duration = 3000) {
         let container = document.querySelector('.toast-container');
         if (!container) {
@@ -621,7 +679,7 @@
     }
 
     // =========================================================================
-    // INITIALIZATION
+    // INITIALIZATION & BINDINGS
     // =========================================================================
 
     function bindEvents() {
@@ -671,16 +729,32 @@
             elements.startBroadcastBtn.addEventListener('click', startBroadcast);
         }
 
+        if (elements.restartBroadcastBtn) {
+            elements.restartBroadcastBtn.addEventListener('click', restartBroadcast);
+        }
+
         if (elements.playPauseBtn) {
             elements.playPauseBtn.addEventListener('click', togglePlayPause);
         }
 
-        if (elements.nextBtn) elements.nextBtn.addEventListener('click', stepNext);
         if (elements.prevBtn) elements.prevBtn.addEventListener('click', stepPrev);
+        if (elements.nextBtn) elements.nextBtn.addEventListener('click', stepNext);
         if (elements.backToInputBtn) elements.backToInputBtn.addEventListener('click', returnToInputScreen);
 
         if (elements.toggleCamBtn) elements.toggleCamBtn.addEventListener('click', toggleWebcam);
         if (elements.flipCamBtn) elements.flipCamBtn.addEventListener('click', flipWebcam);
+
+        // Modal triggers
+        if (elements.showReceiverLinkBtn) elements.showReceiverLinkBtn.addEventListener('click', showReceiverLinkModal);
+        if (elements.showReceiverModalLiveBtn) elements.showReceiverModalLiveBtn.addEventListener('click', showReceiverLinkModal);
+        if (elements.closeReceiverModalBtn) elements.closeReceiverModalBtn.addEventListener('click', hideReceiverLinkModal);
+        if (elements.dismissReceiverModalBtn) elements.dismissReceiverModalBtn.addEventListener('click', hideReceiverLinkModal);
+
+        if (elements.receiverLinkModal) {
+            elements.receiverLinkModal.addEventListener('click', (e) => {
+                if (e.target === elements.receiverLinkModal) hideReceiverLinkModal();
+            });
+        }
 
         window.addEventListener('beforeunload', () => {
             stopPlayback();

@@ -16,8 +16,9 @@
             <span class="nav-title">PeerScanner</span>
         </div>
         <div class="nav-links">
-            <a href="index.html" class="nav-link active">Host Broadcaster (Totes)</a>
-            <a href="peerGrab.html" class="nav-link">Client Receiver (peerGrab)</a>
+            <button id="showReceiverLinkBtn" class="btn btn-secondary btn-sm" title="Show Receiver Link QR for Mobile">📱 Open Receiver QR</button>
+            <a href="index.html" class="nav-link active">Host Broadcaster</a>
+            <a href="peerGrab.html" class="nav-link">Client Receiver</a>
         </div>
     </nav>
 
@@ -47,7 +48,7 @@
                     <button id="clearInputBtn" class="btn btn-secondary">🗑️ Clear</button>
                 </div>
 
-                <!-- Speed Control -->
+                <!-- Persistent Speed Controller -->
                 <div class="speed-control-group">
                     <label for="broadcastSpeedSlider">
                         Broadcast Speed: <span id="broadcastFpsDisplay" class="highlight-text">10 FPS</span> (<span id="broadcastIntervalDisplay">100ms</span>/frame)
@@ -66,10 +67,30 @@
              SCREEN 2: ACTIVE QR BROADCAST & FEEDBACK SCANNER
              ================================================================ -->
         <section id="broadcastScreen" class="broadcast-screen-container" style="display: none;">
-            <header class="page-header">
-                <h1>Optical QR Stream</h1>
-                <p class="subtitle">Broadcasting frames in a continuous loop. ACK'd frames are automatically skipped!</p>
-            </header>
+            <!-- Always Visible Persistent Speed & Controls Toolbar -->
+            <div class="card broadcast-top-bar">
+                <div class="top-bar-left">
+                    <h2>Broadcasting QR Stream</h2>
+                    <span class="badge in-loop-badge" id="inLoopBadge">100 in loop</span>
+                </div>
+
+                <div class="top-bar-speed-group">
+                    <label for="liveSpeedSlider">
+                        Speed: <span id="liveFpsDisplay" class="highlight-text">10 FPS</span> (<span id="liveIntervalDisplay">100ms</span>)
+                    </label>
+                    <input type="range" id="liveSpeedSlider" min="1" max="20" value="10" class="slider-input">
+                </div>
+
+                <div class="top-bar-actions">
+                    <button id="playPauseBtn" class="btn btn-primary btn-sm">
+                        <span id="playPauseIcon">⏸️</span>
+                        <span id="playPauseText">Pause</span>
+                    </button>
+                    <button id="restartBroadcastBtn" class="btn btn-secondary btn-sm" title="Restart transmission from frame 0">🔄 Restart</button>
+                    <button id="backToInputBtn" class="btn btn-secondary btn-sm">✏️ Edit</button>
+                    <button id="showReceiverModalLiveBtn" class="btn btn-secondary btn-sm" title="Show Receiver QR code">📱 Phone QR</button>
+                </div>
+            </div>
 
             <div class="stream-layout">
                 <!-- Left: Animated QR Display -->
@@ -86,23 +107,10 @@
                         <div class="chunk-code-raw" id="frameCodeDisplay">ts0-generating...</div>
                     </div>
 
-                    <!-- Playback Controls -->
+                    <!-- Navigation Step Buttons -->
                     <div class="controls-toolbar">
-                        <button id="playPauseBtn" class="btn btn-primary">
-                            <span id="playPauseIcon">⏸️</span>
-                            <span id="playPauseText">Pause</span>
-                        </button>
-                        <button id="prevBtn" class="btn btn-secondary">⏮️ Prev</button>
-                        <button id="nextBtn" class="btn btn-secondary">⏭️ Next</button>
-                        <button id="backToInputBtn" class="btn btn-secondary">✏️ Edit Totes</button>
-                    </div>
-
-                    <!-- Speed Slider in Broadcast Screen -->
-                    <div class="speed-control-group">
-                        <label for="liveSpeedSlider">
-                            Live Speed: <span id="liveFpsDisplay" class="highlight-text">10 FPS</span> (<span id="liveIntervalDisplay">100ms</span>)
-                        </label>
-                        <input type="range" id="liveSpeedSlider" min="1" max="20" value="10" class="slider-input">
+                        <button id="prevBtn" class="btn btn-secondary btn-sm">⏮️ Prev Frame</button>
+                        <button id="nextBtn" class="btn btn-secondary btn-sm">⏭️ Next Frame</button>
                     </div>
                 </div>
 
@@ -137,7 +145,7 @@
                         <div class="chunk-matrix" id="hostMatrix"></div>
                     </div>
 
-                    <!-- Integrated Webcam ACK Scanner (Front-facing camera default) -->
+                    <!-- Integrated Webcam ACK Scanner -->
                     <div class="feedback-scanner-section">
                         <div class="section-title-row">
                             <h3>Scan Client ACK QR</h3>
@@ -146,7 +154,7 @@
                                 <button id="flipCamBtn" class="btn btn-secondary btn-sm" style="display: none;">🔄 Flip</button>
                             </div>
                         </div>
-                        <p class="section-desc">Point your webcam at the client's screen to automatically drop acknowledged Totes from the loop.</p>
+                        <p class="section-desc">Point webcam at client screen to drop acknowledged Totes.</p>
                         
                         <div id="webcamContainer" class="feedback-cam-container" style="display: none;">
                             <video id="webcamVideo" playsinline></video>
@@ -159,6 +167,30 @@
             </div>
         </section>
     </main>
+
+    <!-- ====================================================================
+         MODAL: RECEIVER PAGE QR CODE (SCAN WITH PHONE TO OPEN peerGrab)
+         ==================================================================== -->
+    <div id="receiverLinkModal" class="modal-overlay" style="display: none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>📱 Open Receiver on Mobile</h3>
+                <button id="closeReceiverModalBtn" class="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">Scan this QR code with your phone camera to open the Receiver page:</p>
+                <div class="receiver-qr-box">
+                    <canvas id="receiverLinkCanvas" width="200" height="200"></canvas>
+                </div>
+                <div class="receiver-url-display">
+                    <a id="receiverUrlLink" href="peerGrab.html" target="_blank" class="receiver-link-text">peerGrab.html</a>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="dismissReceiverModalBtn" class="btn btn-primary">Got It</button>
+            </div>
+        </div>
+    </div>
 
     <script src="app.js"></script>
 </body>
