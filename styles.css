@@ -279,7 +279,7 @@ body.page-body {
     height: 100%;
     background: rgba(15, 23, 42, 0.95);
     border-radius: var(--radius-md);
-    display: flex;
+    display: none;
     flex-direction: column;
     align-items: center;
     justify-content: center;

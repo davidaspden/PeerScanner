@@ -145,10 +145,20 @@
         const realIndex = state.activeIndices[state.currentIndexInActive];
         const sourceCanvas = state.qrCanvases[realIndex];
 
-        if (sourceCanvas) {
+        if (elements.qrCanvas) {
+            elements.qrCanvas.width = 300;
+            elements.qrCanvas.height = 300;
             const ctx = elements.qrCanvas.getContext('2d');
-            ctx.clearRect(0, 0, elements.qrCanvas.width, elements.qrCanvas.height);
-            ctx.drawImage(sourceCanvas, 0, 0, elements.qrCanvas.width, elements.qrCanvas.height);
+            if (sourceCanvas) {
+                ctx.drawImage(sourceCanvas, 0, 0, 300, 300);
+            } else if (window.QRCodeLib && window.QRCodeLib.drawToCanvas) {
+                window.QRCodeLib.drawToCanvas(elements.qrCanvas, state.codes[realIndex], {
+                    width: 300,
+                    height: 300,
+                    margin: 2,
+                    errorCorrectionLevel: 'M'
+                });
+            }
         }
 
         const codeStr = state.codes[realIndex] || '';
