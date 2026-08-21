@@ -23,7 +23,7 @@
     </nav>
 
     <!-- Main Application Container -->
-    <main class="page-container">
+    <main class="page-container host-page-container">
         <!-- ================================================================
              SCREEN 1: TOTE INPUT & CONFIGURATION
              ================================================================ -->
@@ -119,12 +119,13 @@
                 </div>
             </div>
 
-            <div class="stream-layout">
-                <!-- Left: Animated QR Display -->
+            <!-- 50/50 Responsive Stream Layout -->
+            <div class="stream-layout desktop-50-50">
+                <!-- Left: Large High-DPI Animated QR Display -->
                 <div class="card qr-display-card">
                     <div class="qr-canvas-container">
                         <div class="qr-canvas-wrapper" id="qrWrapper">
-                            <canvas id="broadcastCanvas" width="300" height="300"></canvas>
+                            <canvas id="broadcastCanvas" width="460" height="460"></canvas>
                         </div>
                     </div>
 
@@ -190,6 +191,18 @@
                             <div id="webcamStatusText" class="feedback-status-text">Scanning for client ACK QR...</div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Loop Instructions Marquee Banner -->
+            <div class="instructions-marquee-card">
+                <div class="instructions-marquee-track">
+                    <span class="marquee-item">• Point Camera at the Screen</span>
+                    <span class="marquee-item">• Every beep will be an item added to your list</span>
+                    <span class="marquee-item">• When your grid is full, you can start to look for the totes</span>
+                    <span class="marquee-item">• Point Camera at the Screen</span>
+                    <span class="marquee-item">• Every beep will be an item added to your list</span>
+                    <span class="marquee-item">• When your grid is full, you can start to look for the totes</span>
                 </div>
             </div>
         </section>

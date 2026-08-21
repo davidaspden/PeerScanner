@@ -246,8 +246,8 @@
             const canvas = document.createElement('canvas');
             if (window.QRCodeLib && window.QRCodeLib.drawToCanvas) {
                 window.QRCodeLib.drawToCanvas(canvas, formatted, {
-                    width: 300,
-                    height: 300,
+                    width: 460,
+                    height: 460,
                     margin: 2,
                     errorCorrectionLevel: 'M'
                 });
@@ -292,14 +292,14 @@
         if (state.activeIndices.length === 0) {
             const ctx = elements.broadcastCanvas.getContext('2d');
             ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, 300, 300);
+            ctx.fillRect(0, 0, 460, 460);
             ctx.fillStyle = '#10b981';
-            ctx.font = 'bold 20px sans-serif';
+            ctx.font = 'bold 24px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('All Totes Delivered! 🎉', 150, 140);
+            ctx.fillText('All Totes Delivered! 🎉', 230, 210);
             ctx.fillStyle = '#64748b';
-            ctx.font = '14px sans-serif';
-            ctx.fillText('Client acknowledged 100%', 150, 175);
+            ctx.font = '16px sans-serif';
+            ctx.fillText('Client acknowledged 100%', 230, 250);
             if (elements.frameIndexDisplay) elements.frameIndexDisplay.textContent = 'All Items Delivered!';
             if (elements.frameCodeDisplay) elements.frameCodeDisplay.textContent = 'Broadcast Complete';
             if (elements.inLoopBadge) elements.inLoopBadge.textContent = '0 in loop (Done)';
@@ -310,15 +310,15 @@
         const sourceCanvas = state.qrCanvases[realIndex];
 
         if (elements.broadcastCanvas) {
-            elements.broadcastCanvas.width = 300;
-            elements.broadcastCanvas.height = 300;
+            elements.broadcastCanvas.width = 460;
+            elements.broadcastCanvas.height = 460;
             const ctx = elements.broadcastCanvas.getContext('2d');
             if (sourceCanvas) {
-                ctx.drawImage(sourceCanvas, 0, 0, 300, 300);
+                ctx.drawImage(sourceCanvas, 0, 0, 460, 460);
             } else if (window.QRCodeLib && window.QRCodeLib.drawToCanvas) {
                 window.QRCodeLib.drawToCanvas(elements.broadcastCanvas, state.codes[realIndex], {
-                    width: 300,
-                    height: 300,
+                    width: 460,
+                    height: 460,
                     margin: 2,
                     errorCorrectionLevel: 'M'
                 });

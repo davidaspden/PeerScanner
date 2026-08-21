@@ -404,6 +404,16 @@ body.receiver-body {
 /* ==========================================================================
    HOST BROADCAST SCREEN (index.html)
    ========================================================================== */
+.host-page-container {
+    max-width: 1280px;
+}
+
+@media (min-width: 1200px) {
+    .host-page-container {
+        max-width: 1400px;
+    }
+}
+
 .broadcast-top-bar {
     display: flex;
     flex-direction: row;
@@ -495,11 +505,19 @@ body.receiver-body {
     gap: 6px;
 }
 
+/* 50/50 Desktop Stream Layout */
 .stream-layout {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 20px;
     align-items: start;
+}
+
+@media (min-width: 960px) {
+    .stream-layout.desktop-50-50 {
+        grid-template-columns: 1fr 1fr;
+        gap: 28px;
+    }
 }
 
 @media (max-width: 860px) {
@@ -512,21 +530,37 @@ body.receiver-body {
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 6px 0;
+    padding: 8px 0;
 }
 
 .qr-canvas-wrapper {
     position: relative;
     background: #ffffff;
-    padding: 10px;
-    border-radius: var(--radius-md);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 25px rgba(56, 189, 248, 0.2);
+    padding: 14px;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.5), 0 0 35px rgba(56, 189, 248, 0.25);
     display: flex;
     align-items: center;
     justify-content: center;
-    max-width: 300px;
-    max-height: 300px;
+    max-width: 320px;
     width: 100%;
+    transition: max-width 0.3s ease;
+}
+
+@media (min-width: 960px) {
+    .qr-canvas-wrapper {
+        max-width: 440px;
+        max-height: 440px;
+        padding: 16px;
+    }
+}
+
+@media (min-width: 1280px) {
+    .qr-canvas-wrapper {
+        max-width: 490px;
+        max-height: 490px;
+        padding: 18px;
+    }
 }
 
 #broadcastCanvas {
@@ -572,6 +606,43 @@ body.receiver-body {
 
 .controls-toolbar .btn {
     flex: 1;
+}
+
+/* Loop Instructions Marquee Banner */
+.instructions-marquee-card {
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    border-radius: var(--radius-full);
+    padding: 10px 16px;
+    overflow: hidden;
+    white-space: nowrap;
+    position: relative;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.instructions-marquee-track {
+    display: inline-flex;
+    align-items: center;
+    gap: 28px;
+    animation: marqueeScroll 25s linear infinite;
+}
+
+.instructions-marquee-card:hover .instructions-marquee-track {
+    animation-play-state: paused;
+}
+
+.marquee-item {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #93c5fd;
+    display: inline-flex;
+    align-items: center;
+    letter-spacing: 0.01em;
+}
+
+@keyframes marqueeScroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
 }
 
 .speed-control-group {
