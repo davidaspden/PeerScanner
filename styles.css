@@ -430,7 +430,7 @@ body.receiver-body {
 .broadcast-screen-container {
     display: flex;
     flex-direction: column;
-    gap: 22px; /* Generous gap between controls and stream cards */
+    gap: 32px; /* Clear prominent separation between controls and stream cards */
 }
 
 .broadcast-top-bar {
@@ -440,9 +440,11 @@ body.receiver-body {
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 12px;
-    padding: 12px 18px;
-    background: rgba(21, 29, 48, 0.95);
-    border: 1px solid rgba(56, 189, 248, 0.25);
+    padding: 14px 20px;
+    background: var(--bg-card-glass);
+    border: 1px solid var(--bg-card-border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
 }
 
 .top-bar-left {
@@ -929,8 +931,10 @@ body.receiver-body {
     text-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
 }
 
-.item-bullet {
-    font-size: 1rem;
+.item-step {
+    font-size: 1.1rem;
+    line-height: 1;
+    filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.6));
 }
 
 @keyframes seamlessMarquee {
