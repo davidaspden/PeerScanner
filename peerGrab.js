@@ -244,7 +244,6 @@
     // =========================================================================
 
     function startScannerLoop() {
-        // Native BarcodeDetector
         if ('BarcodeDetector' in window && !state.barcodeDetector) {
             try {
                 state.barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
@@ -282,7 +281,7 @@
                     processScannedRawText(result.data);
                 }
             }
-        }, 80); // ~12 scans/sec for responsive 10fps stream tracking
+        }, 80);
     }
 
     /**
@@ -294,7 +293,6 @@
         text = text.trim();
 
         // Regex to extract ts index, code, and optional -last flag
-        // Example: ts42-k9P2aL7x4Q or ts99-zX8v1AbC4-last
         const match = text.match(/^ts(\d+)-([A-Za-z0-9]+)(-last)?$/);
         if (!match) return;
 
@@ -385,7 +383,7 @@
     // =========================================================================
 
     /**
-     * Debounced update for feedback QR code to avoid freezing camera render loop
+     * Debounced update for feedback QR code
      */
     function queueFeedbackQrUpdate() {
         if (state.feedbackDebounceTimer) clearTimeout(state.feedbackDebounceTimer);
@@ -397,7 +395,7 @@
     /**
      * Generate Feedback QR code containing list/ranges of received indices
      */
-    async function updateFeedbackQRCode() {
+    function updateFeedbackQRCode() {
         if (!elements.feedbackQrCanvas) return;
 
         const count = state.receivedMap.size;
@@ -438,16 +436,13 @@
 
         const payload = `ACK_RANGES:${ranges.join(',')}`;
 
-        if (typeof QRCode !== 'undefined' && QRCode.toCanvas) {
+        if (window.QRCodeLib && window.QRCodeLib.drawToCanvas) {
             try {
-                await QRCode.toCanvas(elements.feedbackQrCanvas, payload, {
+                window.QRCodeLib.drawToCanvas(elements.feedbackQrCanvas, payload, {
                     width: 160,
+                    height: 160,
                     margin: 1,
-                    errorCorrectionLevel: 'L',
-                    color: {
-                        dark: '#000000',
-                        light: '#ffffff'
-                    }
+                    errorCorrectionLevel: 'L'
                 });
             } catch (e) {
                 console.warn('Feedback QR generation error:', e);

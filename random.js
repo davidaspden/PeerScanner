@@ -84,7 +84,7 @@
     /**
      * Pre-render QR codes to canvas objects in memory for ultra-smooth 10+ FPS playback
      */
-    async function preRenderQRCodes() {
+    function preRenderQRCodes() {
         if (elements.qrLoading) elements.qrLoading.style.display = 'flex';
 
         state.codes = generateCodeSet();
@@ -96,22 +96,19 @@
             state.activeIndices.push(i);
         }
 
-        const size = 320;
+        const size = 300;
 
         for (let i = 0; i < TOTAL_CODES; i++) {
             const offscreenCanvas = document.createElement('canvas');
             offscreenCanvas.width = size;
             offscreenCanvas.height = size;
 
-            if (typeof QRCode !== 'undefined' && QRCode.toCanvas) {
-                await QRCode.toCanvas(offscreenCanvas, state.codes[i], {
+            if (window.QRCodeLib && window.QRCodeLib.drawToCanvas) {
+                window.QRCodeLib.drawToCanvas(offscreenCanvas, state.codes[i], {
                     width: size,
+                    height: size,
                     margin: 2,
-                    errorCorrectionLevel: 'M',
-                    color: {
-                        dark: '#000000',
-                        light: '#ffffff'
-                    }
+                    errorCorrectionLevel: 'M'
                 });
             }
 
@@ -156,13 +153,12 @@
 
         const codeStr = state.codes[realIndex] || '';
         if (elements.chunkIndexDisplay) {
-            elements.chunkIndexDisplay.textContent = `Frame: ${realIndex + 1} / ${TOTAL_CODES} (${state.activeIndices.length} remaining in loop)`;
+            elements.chunkIndexDisplay.textContent = `Frame: ${realIndex + 1} / ${TOTAL_CODES} (${state.activeIndices.length} in loop)`;
         }
         if (elements.chunkCodeDisplay) {
             elements.chunkCodeDisplay.textContent = codeStr;
         }
 
-        // Highlight playing cell in matrix
         highlightActiveMatrixCell(realIndex);
     }
 
@@ -341,7 +337,7 @@
             updateStatsUI();
             renderCurrentFrame();
 
-            showToast(`ACK received! Dropped ${newlyAckCount} chunks. Remaining in loop: ${state.activeIndices.length}`, 'success');
+            showToast(`ACK received! Dropped ${newlyAckCount} chunks. Remaining: ${state.activeIndices.length}`, 'success');
         }
     }
 
@@ -360,7 +356,9 @@
 
         if (state.feedbackStream) {
             const tracks = state.feedbackStream.getTracks();
-            tracks.forEach(t => t.stop());
+            tracks.forEach(t => {
+                try { t.stop(); } catch (e) {}
+            });
             state.feedbackStream = null;
         }
 
@@ -368,7 +366,6 @@
             elements.feedbackVideo.srcObject = null;
         }
 
-        // Brief delay to ensure camera hardware is fully released
         await new Promise(r => setTimeout(r, 200));
 
         state.isFeedbackCamActive = false;
@@ -384,7 +381,7 @@
      * Start feedback camera with clean lifecycle
      */
     async function startFeedbackCamera() {
-        await stopFeedbackCamera(); // Guarantee previous camera is destroyed!
+        await stopFeedbackCamera();
 
         if (elements.feedbackCamContainer) elements.feedbackCamContainer.style.display = 'block';
         if (elements.feedbackScanStatus) elements.feedbackScanStatus.textContent = 'Requesting camera access...';
@@ -415,7 +412,6 @@
 
             if (elements.feedbackScanStatus) elements.feedbackScanStatus.textContent = 'Scanning for client ACK QR code...';
 
-            // Start QR scan loop
             startFeedbackScanLoop();
         } catch (err) {
             console.error('Feedback camera error:', err);
@@ -436,7 +432,6 @@
      * Scanner loop for feedback camera using native BarcodeDetector or jsQR
      */
     function startFeedbackScanLoop() {
-        // Initialize native BarcodeDetector if available
         if ('BarcodeDetector' in window && !state.feedbackDetector) {
             try {
                 state.feedbackDetector = new BarcodeDetector({ formats: ['qr_code'] });
@@ -477,7 +472,6 @@
 
     /**
      * Parse feedback string from client ACK QR
-     * Format supported: "ACK:0,1,2,3,4..." or JSON '{"ack":[0,1,2...]}' or compact ranges "ACK_RANGES:0-10,15-20"
      */
     function handleFeedbackRawText(text) {
         if (!text || typeof text !== 'string') return;
