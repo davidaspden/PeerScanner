@@ -1286,6 +1286,26 @@ body.receiver-body {
     to { opacity: 1; transform: translateY(0); }
 }
 
+/* Page Footer */
+.page-footer {
+    text-align: center;
+    padding: 24px 0 16px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.page-footer a {
+    color: #38bdf8;
+    text-decoration: none;
+    font-weight: 600;
+    transition: var(--transition);
+}
+
+.page-footer a:hover {
+    color: #60a5fa;
+    text-decoration: underline;
+}
+
 /* Mobile Adjustments */
 @media (max-width: 480px) {
     .top-nav { padding: 8px 10px; }
