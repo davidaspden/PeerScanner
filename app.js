@@ -276,7 +276,7 @@
         state.currentIndexInActive = 0;
 
         if (elements.inputScreen) elements.inputScreen.style.display = 'none';
-        if (elements.broadcastScreen) elements.broadcastScreen.style.display = 'block';
+        if (elements.broadcastScreen) elements.broadcastScreen.style.display = 'flex';
 
         setBroadcastMode(state.broadcastMode);
         buildHostMatrixDOM(total);

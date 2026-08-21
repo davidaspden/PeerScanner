@@ -445,6 +445,7 @@ body.receiver-body {
     border: 1px solid var(--bg-card-border);
     border-radius: var(--radius-lg);
     box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    margin-bottom: 24px; /* Guaranteed distinct separation from cards below */
 }
 
 .top-bar-left {
