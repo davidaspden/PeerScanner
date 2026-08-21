@@ -109,12 +109,7 @@
                 </div>
 
                 <div class="top-bar-actions">
-                    <button id="playPauseBtn" class="btn btn-primary btn-sm">
-                        <span id="playPauseIcon">⏸️</span>
-                        <span id="playPauseText">Pause</span>
-                    </button>
-                    <button id="restartBroadcastBtn" class="btn btn-secondary btn-sm" title="Restart transmission from frame 0">🔄 Restart</button>
-                    <button id="backToInputBtn" class="btn btn-secondary btn-sm">✏️ Edit</button>
+                    <button id="backToInputBtn" class="btn btn-secondary btn-sm">✏️ Edit Barcodes</button>
                 </div>
             </div>
 
@@ -134,10 +129,15 @@
                         <div class="chunk-code-raw" id="frameCodeDisplay">Generating...</div>
                     </div>
 
-                    <!-- Navigation Step Buttons (Active Only When Paused) -->
+                    <!-- Controls Toolbar Under QR Code -->
                     <div class="controls-toolbar">
-                        <button id="prevBtn" class="btn btn-secondary btn-sm" disabled title="Paused only">⏮️ Prev Frame</button>
-                        <button id="nextBtn" class="btn btn-secondary btn-sm" disabled title="Paused only">⏭️ Next Frame</button>
+                        <button id="playPauseBtn" class="btn btn-primary btn-sm">
+                            <span id="playPauseIcon">⏸️</span>
+                            <span id="playPauseText">Pause</span>
+                        </button>
+                        <button id="restartBroadcastBtn" class="btn btn-secondary btn-sm" title="Restart stream from first unacknowledged barcode">🔄 Restart</button>
+                        <button id="prevBtn" class="btn btn-secondary btn-sm" disabled title="Paused only">⏮️ Prev</button>
+                        <button id="nextBtn" class="btn btn-secondary btn-sm" disabled title="Paused only">⏭️ Next</button>
                     </div>
                 </div>
 
@@ -164,9 +164,9 @@
                         <div class="section-title-row">
                             <h3>Transmission Matrix</h3>
                             <span class="matrix-legend">
-                                <span class="legend-dot active"></span> In Loop
-                                <span id="ackLegendItem"><span class="legend-dot ack"></span> ACK'd</span>
-                                <span class="legend-dot current"></span> Playing
+                                <span class="legend-item"><span class="legend-dot active"></span> In Loop</span>
+                                <span class="legend-item" id="ackLegendItem"><span class="legend-dot ack"></span> ACK'd</span>
+                                <span class="legend-item"><span class="legend-dot current"></span> Playing</span>
                             </span>
                         </div>
                         <div class="chunk-matrix" id="hostMatrix"></div>

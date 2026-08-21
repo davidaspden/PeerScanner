@@ -637,10 +637,12 @@ body.receiver-body {
     display: flex;
     gap: 8px;
     justify-content: center;
+    flex-wrap: wrap;
 }
 
 .controls-toolbar .btn {
     flex: 1;
+    min-width: 75px;
 }
 
 .speed-control-group {
@@ -739,9 +741,23 @@ body.receiver-body {
 .matrix-legend {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 0.72rem;
+    gap: 12px;
+    font-size: 0.74rem;
     color: var(--text-secondary);
+}
+
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    line-height: 1;
+}
+
+#ackLegendItem {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    line-height: 1;
 }
 
 .legend-dot {
@@ -749,8 +765,7 @@ body.receiver-body {
     width: 8px;
     height: 8px;
     border-radius: 2px;
-    vertical-align: middle;
-    margin-right: 3px;
+    flex-shrink: 0;
 }
 
 .legend-dot.active { background-color: #3b82f6; }

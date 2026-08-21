@@ -289,12 +289,18 @@
     }
 
     function restartBroadcast() {
+        if (state.activeIndices.length === 0) return;
         state.currentIndexInActive = 0;
         renderCurrentFrame();
-        if (!state.isPlaying) {
+
+        if (state.isPlaying) {
             startPlayback();
+            const firstUnack = state.activeIndices[0] + 1;
+            showToast(`Restarted from Barcode #${firstUnack}`, 'info');
+        } else {
+            const firstUnack = state.activeIndices[0] + 1;
+            showToast(`Jumped to Barcode #${firstUnack} (Paused)`, 'info');
         }
-        showToast('Restarted stream loop from frame 1', 'info');
     }
 
     function returnToInputScreen() {
