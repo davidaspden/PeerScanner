@@ -1,85 +1,88 @@
 /**
- * PeerScanner - WebRTC Barcode Scanner Application Logic
- * Supports PeerJS peer-to-peer WebRTC data synchronization,
- * QuaggaJS barcode scanning, native BarcodeDetector API,
- * torch controls, sound/haptic feedback, JSON export,
- * and seamless loading of optical QR stream data.
+ * app.js - Optical Tote Broadcaster & Controller (Host)
+ * Accepts pasted Totes/barcodes, chunks into tsX-code items,
+ * broadcasts animated QR codes at 10 FPS, skips ACK'd frames on loop,
+ * and scans client ACK QR codes using front-facing webcam.
  */
 
 (function () {
     'use strict';
 
-    // Application State
+    // State
     const state = {
-        peer: null,
-        connection: null,
-        myPeerId: null,
-        connectedPeerId: null,
-        scannedItems: [], // [{ id, barcode, format, timestamp, timeDisplay, source }]
-        isScanning: false,
-        isTorchOn: false,
-        lastScannedCode: null,
-        lastScanTime: 0,
-        scanCooldownMs: 2000, // Cooldown for duplicate scans
-        minScanIntervalMs: 600, // Minimum delay between any scans
-        barcodeDetector: null,
-        detectorInterval: null
+        rawTotes: [],
+        codes: [], // formatted ts0-tote ... ts99-tote-last
+        qrCanvases: [], // pre-rendered canvas elements
+        activeIndices: [], // list of indices remaining in the loop
+        ackSet: new Set(), // acknowledged indices
+        currentIndexInActive: 0,
+        isPlaying: false,
+        fps: 10,
+        timerId: null,
+        
+        // Webcam state
+        isCamActive: false,
+        currentFacingMode: 'user', // default to front-facing camera!
+        camStream: null,
+        camDetector: null,
+        camScanInterval: null
     };
 
     // DOM Elements
     const elements = {
         // Screens
-        connectionScreen: document.getElementById('connectionScreen'),
-        scannerScreen: document.getElementById('scannerScreen'),
-        loadingIndicator: document.getElementById('loadingIndicator'),
+        inputScreen: document.getElementById('inputScreen'),
+        broadcastScreen: document.getElementById('broadcastScreen'),
         
-        // Connection screen
-        peerIdDisplay: document.getElementById('peerId'),
-        copyPeerIdBtn: document.getElementById('copyPeerIdBtn'),
-        remotePeerIdInput: document.getElementById('remotePeerId'),
-        connectBtn: document.getElementById('connectBtn'),
-        connectionStatus: document.getElementById('connectionStatus'),
+        // Input Controls
+        totesInput: document.getElementById('totesInput'),
+        toteCountBadge: document.getElementById('toteCountBadge'),
+        generateSampleBtn: document.getElementById('generateSampleBtn'),
+        pasteClipboardBtn: document.getElementById('pasteClipboardBtn'),
+        clearInputBtn: document.getElementById('clearInputBtn'),
+        broadcastSpeedSlider: document.getElementById('broadcastSpeedSlider'),
+        broadcastFpsDisplay: document.getElementById('broadcastFpsDisplay'),
+        broadcastIntervalDisplay: document.getElementById('broadcastIntervalDisplay'),
+        startBroadcastBtn: document.getElementById('startBroadcastBtn'),
         
-        // Scanner screen
-        quaggaContainer: document.getElementById('quagga-container'),
-        scanBox: document.querySelector('.scan-box'),
-        peerStatusBadge: document.getElementById('peerStatusBadge'),
-        peerStatusText: document.getElementById('peerStatusText'),
-        lastScannedDisplay: document.getElementById('lastScannedDisplay'),
-        lastScannedCode: document.getElementById('lastScannedCode'),
-        fabButton: document.getElementById('fabButton'),
-        fabCount: document.getElementById('fabCount'),
+        // Broadcast Controls
+        broadcastCanvas: document.getElementById('broadcastCanvas'),
+        frameIndexDisplay: document.getElementById('frameIndexDisplay'),
+        frameCodeDisplay: document.getElementById('frameCodeDisplay'),
+        playPauseBtn: document.getElementById('playPauseBtn'),
+        playPauseIcon: document.getElementById('playPauseIcon'),
+        playPauseText: document.getElementById('playPauseText'),
+        prevBtn: document.getElementById('prevBtn'),
+        nextBtn: document.getElementById('nextBtn'),
+        backToInputBtn: document.getElementById('backToInputBtn'),
+        liveSpeedSlider: document.getElementById('liveSpeedSlider'),
+        liveFpsDisplay: document.getElementById('liveFpsDisplay'),
+        liveIntervalDisplay: document.getElementById('liveIntervalDisplay'),
         
-        // Modal
-        scannedModal: document.getElementById('scannedModal'),
-        closeModalBtn: document.getElementById('closeModalBtn'),
-        scannedList: document.getElementById('scannedList'),
-        clearScannedBtn: document.getElementById('clearScannedBtn'),
-        exportScannedBtn: document.getElementById('exportScannedBtn'),
+        // Stats & Matrix
+        statTotal: document.getElementById('statTotal'),
+        statActive: document.getElementById('statActive'),
+        statAck: document.getElementById('statAck'),
+        hostMatrix: document.getElementById('hostMatrix'),
         
-        // Action Bar
-        disconnectBtn: document.getElementById('disconnectBtn'),
-        torchBtn: document.getElementById('torchBtn')
+        // Webcam Scanner
+        toggleCamBtn: document.getElementById('toggleCamBtn'),
+        flipCamBtn: document.getElementById('flipCamBtn'),
+        webcamContainer: document.getElementById('webcamContainer'),
+        webcamVideo: document.getElementById('webcamVideo'),
+        webcamCanvas: document.getElementById('webcamCanvas'),
+        webcamStatusText: document.getElementById('webcamStatusText')
     };
 
-    // Web Audio Synthesizer for Scans
+    // Synthesized sound on ACK
     let audioCtx = null;
-
-    /**
-     * Play synthesized audio chirp on barcode detection
-     * @param {boolean} isRemote - whether the scan originated from remote peer
-     */
-    function playScanSound(isRemote = false) {
+    function playAckChime() {
         try {
             if (!audioCtx) {
                 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-                if (AudioContextClass) {
-                    audioCtx = new AudioContextClass();
-                }
+                if (AudioContextClass) audioCtx = new AudioContextClass();
             }
-            if (audioCtx && audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
             if (!audioCtx) return;
 
             const now = audioCtx.currentTime;
@@ -88,44 +91,516 @@
             osc.connect(gain);
             gain.connect(audioCtx.destination);
 
-            if (!isRemote) {
-                // Local scan: crisp high-pitched chirp (880Hz -> 1760Hz)
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(880, now);
-                osc.frequency.exponentialRampToValueAtTime(1760, now + 0.08);
-                gain.gain.setValueAtTime(0.3, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
-                osc.start(now);
-                osc.stop(now + 0.14);
-            } else {
-                // Remote peer scan: dual tone melodic chime
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(587.33, now); // D5
-                osc.frequency.setValueAtTime(880, now + 0.06); // A5
-                gain.gain.setValueAtTime(0.25, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-                osc.start(now);
-                osc.stop(now + 0.2);
-            }
-        } catch (e) {
-            console.warn('Audio playback not permitted or supported:', e);
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(587.33, now); // D5
+            osc.frequency.setValueAtTime(880, now + 0.08); // A5
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+            osc.start(now);
+            osc.stop(now + 0.2);
+        } catch (e) {}
+    }
+
+    /**
+     * Parse Totes input from textarea
+     */
+    function getParsedTotesFromInput() {
+        const text = elements.totesInput ? elements.totesInput.value.trim() : '';
+        if (!text) return [];
+
+        return text
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0)
+            .slice(0, 100); // cap at 100
+    }
+
+    function updateInputCount() {
+        const count = getParsedTotesFromInput().length;
+        if (elements.toteCountBadge) {
+            elements.toteCountBadge.textContent = `${count} Tote${count === 1 ? '' : 's'} entered`;
         }
     }
 
     /**
-     * Trigger device haptic vibration if supported
+     * Generate 100 sample Tote barcodes
      */
-    function triggerHaptic() {
-        if ('vibrate' in navigator) {
+    function generate100SampleTotes() {
+        const samples = [];
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        for (let i = 1; i <= 100; i++) {
+            let randStr = '';
+            for (let k = 0; k < 6; k++) {
+                randStr += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            const padded = String(i).padStart(3, '0');
+            samples.push(`TOTE_${padded}_${randStr}`);
+        }
+
+        if (elements.totesInput) {
+            elements.totesInput.value = samples.join('\n');
+            updateInputCount();
+        }
+        showToast('Generated 100 sample Totes!', 'info');
+    }
+
+    // =========================================================================
+    // QR BROADCAST ENGINE
+    // =========================================================================
+
+    /**
+     * Prepare dataset, pre-render QR frames, and switch to broadcast screen
+     */
+    function startBroadcast() {
+        let totes = getParsedTotesFromInput();
+        if (totes.length === 0) {
+            // Auto-generate if empty
+            generate100SampleTotes();
+            totes = getParsedTotesFromInput();
+        }
+
+        state.rawTotes = totes;
+        const total = totes.length;
+
+        // Build tsX-tote and tsX-tote-last strings
+        state.codes = [];
+        state.qrCanvases = [];
+        state.activeIndices = [];
+        state.ackSet.clear();
+
+        for (let i = 0; i < total; i++) {
+            const isLast = (i === total - 1);
+            const formatted = `ts${i}-${totes[i]}${isLast ? '-last' : ''}`;
+            state.codes.push(formatted);
+            state.activeIndices.push(i);
+
+            // Pre-render QR canvas synchronously
+            const canvas = document.createElement('canvas');
+            if (window.QRCodeLib && window.QRCodeLib.drawToCanvas) {
+                window.QRCodeLib.drawToCanvas(canvas, formatted, {
+                    width: 300,
+                    height: 300,
+                    margin: 2,
+                    errorCorrectionLevel: 'M'
+                });
+            }
+            state.qrCanvases.push(canvas);
+        }
+
+        state.currentIndexInActive = 0;
+
+        // Switch to broadcast screen
+        if (elements.inputScreen) elements.inputScreen.style.display = 'none';
+        if (elements.broadcastScreen) elements.broadcastScreen.style.display = 'block';
+
+        buildHostMatrixDOM(total);
+        updateMatrixUI();
+        updateStatsUI();
+        renderCurrentFrame();
+        startPlayback();
+
+        showToast(`Broadcasting ${total} Totes at ${state.fps} FPS`, 'success');
+    }
+
+    function returnToInputScreen() {
+        stopPlayback();
+        stopWebcam();
+        if (elements.broadcastScreen) elements.broadcastScreen.style.display = 'none';
+        if (elements.inputScreen) elements.inputScreen.style.display = 'block';
+    }
+
+    /**
+     * Render the active frame onto the visible canvas
+     */
+    function renderCurrentFrame() {
+        if (!elements.broadcastCanvas || state.qrCanvases.length === 0) return;
+
+        if (state.activeIndices.length === 0) {
+            const ctx = elements.broadcastCanvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, 300, 300);
+            ctx.fillStyle = '#10b981';
+            ctx.font = 'bold 20px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('All Totes Delivered! 🎉', 150, 140);
+            ctx.fillStyle = '#64748b';
+            ctx.font = '14px sans-serif';
+            ctx.fillText('Client acknowledged 100%', 150, 175);
+            if (elements.frameIndexDisplay) elements.frameIndexDisplay.textContent = 'All Items Delivered!';
+            if (elements.frameCodeDisplay) elements.frameCodeDisplay.textContent = 'Broadcast Complete';
+            return;
+        }
+
+        const realIndex = state.activeIndices[state.currentIndexInActive];
+        const sourceCanvas = state.qrCanvases[realIndex];
+
+        if (elements.broadcastCanvas) {
+            elements.broadcastCanvas.width = 300;
+            elements.broadcastCanvas.height = 300;
+            const ctx = elements.broadcastCanvas.getContext('2d');
+            if (sourceCanvas) {
+                ctx.drawImage(sourceCanvas, 0, 0, 300, 300);
+            } else if (window.QRCodeLib && window.QRCodeLib.drawToCanvas) {
+                window.QRCodeLib.drawToCanvas(elements.broadcastCanvas, state.codes[realIndex], {
+                    width: 300,
+                    height: 300,
+                    margin: 2,
+                    errorCorrectionLevel: 'M'
+                });
+            }
+        }
+
+        const total = state.codes.length;
+        if (elements.frameIndexDisplay) {
+            elements.frameIndexDisplay.textContent = `Frame: ${realIndex + 1} / ${total} (${state.activeIndices.length} in loop)`;
+        }
+        if (elements.frameCodeDisplay) {
+            elements.frameCodeDisplay.textContent = state.codes[realIndex] || '';
+        }
+
+        highlightActiveMatrixCell(realIndex);
+    }
+
+    /**
+     * Advance to the next frame in the active queue.
+     * When looping past the end, automatically skips ACK'd items!
+     */
+    function stepNext() {
+        if (state.activeIndices.length === 0) return;
+        state.currentIndexInActive = (state.currentIndexInActive + 1) % state.activeIndices.length;
+        renderCurrentFrame();
+    }
+
+    function stepPrev() {
+        if (state.activeIndices.length === 0) return;
+        state.currentIndexInActive = (state.currentIndexInActive - 1 + state.activeIndices.length) % state.activeIndices.length;
+        renderCurrentFrame();
+    }
+
+    function startPlayback() {
+        stopPlayback();
+        state.isPlaying = true;
+        updatePlayPauseButton();
+
+        const intervalMs = Math.round(1000 / state.fps);
+        state.timerId = setInterval(() => {
+            stepNext();
+        }, intervalMs);
+    }
+
+    function stopPlayback() {
+        if (state.timerId) {
+            clearInterval(state.timerId);
+            state.timerId = null;
+        }
+        state.isPlaying = false;
+        updatePlayPauseButton();
+    }
+
+    function togglePlayPause() {
+        if (state.isPlaying) {
+            stopPlayback();
+        } else {
+            startPlayback();
+        }
+    }
+
+    function updatePlayPauseButton() {
+        if (!elements.playPauseBtn) return;
+        if (state.isPlaying) {
+            elements.playPauseIcon.textContent = '⏸️';
+            elements.playPauseText.textContent = 'Pause';
+            elements.playPauseBtn.classList.remove('btn-secondary');
+            elements.playPauseBtn.classList.add('btn-primary');
+        } else {
+            elements.playPauseIcon.textContent = '▶️';
+            elements.playPauseText.textContent = 'Play';
+            elements.playPauseBtn.classList.remove('btn-primary');
+            elements.playPauseBtn.classList.add('btn-secondary');
+        }
+    }
+
+    function setFps(newFps) {
+        state.fps = Math.max(1, Math.min(20, newFps));
+        const interval = Math.round(1000 / state.fps);
+        
+        if (elements.broadcastFpsDisplay) elements.broadcastFpsDisplay.textContent = `${state.fps} FPS`;
+        if (elements.broadcastIntervalDisplay) elements.broadcastIntervalDisplay.textContent = `${interval}ms`;
+        if (elements.liveFpsDisplay) elements.liveFpsDisplay.textContent = `${state.fps} FPS`;
+        if (elements.liveIntervalDisplay) elements.liveIntervalDisplay.textContent = `${interval}ms`;
+
+        if (elements.broadcastSpeedSlider) elements.broadcastSpeedSlider.value = state.fps;
+        if (elements.liveSpeedSlider) elements.liveSpeedSlider.value = state.fps;
+
+        if (state.isPlaying) {
+            startPlayback();
+        }
+    }
+
+    // =========================================================================
+    // 100-SQUARE TRANSMISSION MATRIX & STATS
+    // =========================================================================
+
+    function buildHostMatrixDOM(count) {
+        if (!elements.hostMatrix) return;
+        elements.hostMatrix.innerHTML = '';
+
+        for (let i = 0; i < count; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'matrix-cell active';
+            cell.id = `hostMatrixCell_${i}`;
+            cell.title = `Tote #${i + 1}: ${state.rawTotes[i] || ''}`;
+            cell.textContent = `${i}`;
+            elements.hostMatrix.appendChild(cell);
+        }
+    }
+
+    function updateMatrixUI() {
+        const total = state.codes.length;
+        for (let i = 0; i < total; i++) {
+            const cell = document.getElementById(`hostMatrixCell_${i}`);
+            if (!cell) continue;
+
+            if (state.ackSet.has(i)) {
+                cell.className = 'matrix-cell ack';
+            } else {
+                cell.className = 'matrix-cell active';
+            }
+        }
+    }
+
+    function highlightActiveMatrixCell(activeIdx) {
+        document.querySelectorAll('.matrix-cell.playing').forEach(el => {
+            const idx = parseInt(el.textContent, 10);
+            if (state.ackSet.has(idx)) {
+                el.className = 'matrix-cell ack';
+            } else {
+                el.className = 'matrix-cell active';
+            }
+        });
+
+        const activeCell = document.getElementById(`hostMatrixCell_${activeIdx}`);
+        if (activeCell) {
+            activeCell.classList.add('playing');
+        }
+    }
+
+    function updateStatsUI() {
+        const total = state.codes.length;
+        if (elements.statTotal) elements.statTotal.textContent = total;
+        if (elements.statActive) elements.statActive.textContent = state.activeIndices.length;
+        if (elements.statAck) elements.statAck.textContent = state.ackSet.size;
+    }
+
+    /**
+     * Process client ACK payload and drop acknowledged items from loop
+     */
+    function processClientAck(ackList) {
+        if (!Array.isArray(ackList) || ackList.length === 0) return;
+
+        const total = state.codes.length;
+        let newAcks = 0;
+
+        ackList.forEach(idx => {
+            if (typeof idx === 'number' && idx >= 0 && idx < total) {
+                if (!state.ackSet.has(idx)) {
+                    state.ackSet.add(idx);
+                    newAcks++;
+                }
+            }
+        });
+
+        if (newAcks > 0) {
+            playAckChime();
+
+            // Reconstruct activeIndices excluding all acknowledged ones
+            state.activeIndices = [];
+            for (let i = 0; i < total; i++) {
+                if (!state.ackSet.has(i)) {
+                    state.activeIndices.push(i);
+                }
+            }
+
+            if (state.currentIndexInActive >= state.activeIndices.length) {
+                state.currentIndexInActive = 0;
+            }
+
+            updateMatrixUI();
+            updateStatsUI();
+            renderCurrentFrame();
+
+            showToast(`Received ACK! Dropped ${newAcks} Totes. Remaining in loop: ${state.activeIndices.length}`, 'success');
+        }
+    }
+
+    // =========================================================================
+    // WEBCAM SCANNER (FRONT-FACING CAMERA DEFAULT)
+    // =========================================================================
+
+    async function stopWebcam() {
+        if (state.camScanInterval) {
+            clearInterval(state.camScanInterval);
+            state.camScanInterval = null;
+        }
+
+        if (state.camStream) {
+            const tracks = state.camStream.getTracks();
+            tracks.forEach(track => {
+                try { track.stop(); } catch (e) {}
+            });
+            state.camStream = null;
+        }
+
+        if (elements.webcamVideo) {
+            elements.webcamVideo.srcObject = null;
+        }
+
+        await new Promise(r => setTimeout(r, 200));
+
+        state.isCamActive = false;
+        if (elements.webcamContainer) elements.webcamContainer.style.display = 'none';
+        if (elements.flipCamBtn) elements.flipCamBtn.style.display = 'none';
+        if (elements.toggleCamBtn) {
+            elements.toggleCamBtn.textContent = '📷 Start Webcam';
+            elements.toggleCamBtn.classList.remove('btn-primary');
+            elements.toggleCamBtn.classList.add('btn-secondary');
+        }
+    }
+
+    async function startWebcam() {
+        await stopWebcam();
+
+        if (elements.webcamContainer) elements.webcamContainer.style.display = 'block';
+        if (elements.flipCamBtn) elements.flipCamBtn.style.display = 'inline-flex';
+        if (elements.webcamStatusText) elements.webcamStatusText.textContent = 'Starting webcam...';
+
+        try {
+            // Default to front-facing camera ("user")
+            const constraints = {
+                audio: false,
+                video: {
+                    facingMode: { ideal: state.currentFacingMode },
+                    width: { ideal: 640 },
+                    height: { ideal: 480 }
+                }
+            };
+
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            state.camStream = stream;
+            state.isCamActive = true;
+
+            if (elements.webcamVideo) {
+                elements.webcamVideo.srcObject = stream;
+                await elements.webcamVideo.play();
+            }
+
+            if (elements.toggleCamBtn) {
+                elements.toggleCamBtn.textContent = '🛑 Stop Webcam';
+                elements.toggleCamBtn.classList.remove('btn-secondary');
+                elements.toggleCamBtn.classList.add('btn-primary');
+            }
+
+            if (elements.webcamStatusText) elements.webcamStatusText.textContent = 'Scanning for client ACK QR code...';
+
+            startWebcamScanLoop();
+        } catch (err) {
+            console.error('Webcam error:', err);
+            showToast('Webcam error: ' + (err.message || err.name), 'error');
+            await stopWebcam();
+        }
+    }
+
+    function toggleWebcam() {
+        if (state.isCamActive) {
+            stopWebcam();
+        } else {
+            startWebcam();
+        }
+    }
+
+    function flipWebcam() {
+        state.currentFacingMode = (state.currentFacingMode === 'user') ? 'environment' : 'user';
+        startWebcam();
+    }
+
+    function startWebcamScanLoop() {
+        if ('BarcodeDetector' in window && !state.camDetector) {
             try {
-                navigator.vibrate([60, 40, 60]);
+                state.camDetector = new BarcodeDetector({ formats: ['qr_code'] });
             } catch (e) {}
         }
+
+        const scanCanvas = elements.webcamCanvas || document.createElement('canvas');
+        const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
+
+        state.camScanInterval = setInterval(async () => {
+            if (!state.isCamActive || !elements.webcamVideo) return;
+            if (elements.webcamVideo.readyState < 2) return;
+
+            // 1. Try native BarcodeDetector
+            if (state.camDetector) {
+                try {
+                    const barcodes = await state.camDetector.detect(elements.webcamVideo);
+                    if (barcodes && barcodes.length > 0) {
+                        handleAckQrRawText(barcodes[0].rawValue);
+                        return;
+                    }
+                } catch (e) {}
+            }
+
+            // 2. Fallback to jsQR
+            if (typeof jsQR !== 'undefined') {
+                scanCanvas.width = elements.webcamVideo.videoWidth || 320;
+                scanCanvas.height = elements.webcamVideo.videoHeight || 240;
+                scanCtx.drawImage(elements.webcamVideo, 0, 0, scanCanvas.width, scanCanvas.height);
+                const imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+                const qrCode = jsQR(imageData.data, imageData.width, imageData.height);
+                if (qrCode && qrCode.data) {
+                    handleAckQrRawText(qrCode.data);
+                }
+            }
+        }, 180);
     }
 
     /**
-     * Show non-intrusive floating toast notification
+     * Parse ACK QR code text
+     * Supported formats:
+     * - "ACK:0,1,2,3,4,5..."
+     * - "ACK_RANGES:0-15,18,22-50"
+     * - JSON {"ack":[0,1,2...]}
      */
+    function handleAckQrRawText(text) {
+        if (!text || typeof text !== 'string') return;
+        text = text.trim();
+
+        try {
+            if (text.startsWith('ACK:')) {
+                const parts = text.substring(4).split(',').map(n => parseInt(n.trim(), 10)).filter(n => !isNaN(n));
+                processClientAck(parts);
+            } else if (text.startsWith('ACK_RANGES:')) {
+                const rangeStr = text.substring(11);
+                const list = [];
+                rangeStr.split(',').forEach(token => {
+                    if (token.includes('-')) {
+                        const [start, end] = token.split('-').map(n => parseInt(n, 10));
+                        for (let k = start; k <= end; k++) list.push(k);
+                    } else {
+                        const n = parseInt(token, 10);
+                        if (!isNaN(n)) list.push(n);
+                    }
+                });
+                processClientAck(list);
+            } else if (text.startsWith('{')) {
+                const json = JSON.parse(text);
+                if (Array.isArray(json.ack)) {
+                    processClientAck(json.ack);
+                }
+            }
+        } catch (e) {
+            console.warn('ACK parse error:', e);
+        }
+    }
+
     function showToast(message, type = 'info', duration = 3000) {
         let container = document.querySelector('.toast-container');
         if (!container) {
@@ -136,886 +611,15 @@
 
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
-        
-        let icon = 'ℹ️';
-        if (type === 'success') icon = '✅';
-        if (type === 'error') icon = '⚠️';
-
-        toast.innerHTML = `<span>${icon}</span> <span>${escapeHtml(message)}</span>`;
+        toast.textContent = message;
         container.appendChild(toast);
 
         setTimeout(() => {
             toast.classList.add('hiding');
             setTimeout(() => {
-                if (toast.parentNode) {
-                    toast.parentNode.removeChild(toast);
-                }
+                if (toast.parentNode) toast.parentNode.removeChild(toast);
             }, 300);
         }, duration);
-    }
-
-    /**
-     * Show connection status message on setup screen
-     */
-    function showConnectionStatus(message, type = 'info') {
-        if (!elements.connectionStatus) return;
-        if (!message) {
-            elements.connectionStatus.style.display = 'none';
-            elements.connectionStatus.textContent = '';
-            elements.connectionStatus.className = 'status-message';
-            return;
-        }
-        elements.connectionStatus.textContent = message;
-        elements.connectionStatus.className = `status-message ${type}`;
-        elements.connectionStatus.style.display = 'block';
-    }
-
-    /**
-     * Escape HTML string helper
-     */
-    function escapeHtml(str) {
-        if (!str) return '';
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-    }
-
-    /**
-     * Switch visible screen
-     */
-    function switchScreen(screenName) {
-        if (screenName === 'scanner') {
-            elements.connectionScreen.classList.remove('active');
-            elements.scannerScreen.classList.add('active');
-        } else {
-            elements.scannerScreen.classList.remove('active');
-            elements.connectionScreen.classList.add('active');
-        }
-    }
-
-    /**
-     * Set loading indicator state
-     */
-    function setLoading(isLoading, text = 'Initializing camera...') {
-        if (!elements.loadingIndicator) return;
-        if (isLoading) {
-            const p = elements.loadingIndicator.querySelector('p');
-            if (p) p.textContent = text;
-            elements.loadingIndicator.classList.add('active');
-        } else {
-            elements.loadingIndicator.classList.remove('active');
-        }
-    }
-
-    /**
-     * Build scan reticle corners and laser elements inside .scan-box
-     */
-    function setupScanBoxOverlay() {
-        if (!elements.scanBox) return;
-        if (!elements.scanBox.querySelector('.scan-laser')) {
-            const laser = document.createElement('div');
-            laser.className = 'scan-laser';
-            elements.scanBox.appendChild(laser);
-        }
-        if (!elements.scanBox.querySelector('.scan-box-corner-tr')) {
-            const tr = document.createElement('div');
-            tr.className = 'scan-box-corner-tr';
-            elements.scanBox.appendChild(tr);
-        }
-        if (!elements.scanBox.querySelector('.scan-box-corner-bl')) {
-            const bl = document.createElement('div');
-            bl.className = 'scan-box-corner-bl';
-            elements.scanBox.appendChild(bl);
-        }
-    }
-
-    /**
-     * Ensure peer status dot indicator is present
-     */
-    function setupPeerStatusIndicator() {
-        if (!elements.peerStatusBadge) return;
-        if (!elements.peerStatusBadge.querySelector('.peer-status-dot')) {
-            const dot = document.createElement('span');
-            dot.className = 'peer-status-dot';
-            elements.peerStatusBadge.insertBefore(dot, elements.peerStatusBadge.firstChild);
-        }
-    }
-
-    // =========================================================================
-    // PEERJS WEBRTC CONNECTION HANDLING
-    // =========================================================================
-
-    /**
-     * Initialize local PeerJS instance
-     */
-    function initPeer() {
-        if (typeof Peer === 'undefined') {
-            showConnectionStatus('PeerJS library failed to load. (Use optical transfer if offline/air-gapped)', 'info');
-            return;
-        }
-
-        if (elements.peerIdDisplay) {
-            elements.peerIdDisplay.textContent = 'Generating...';
-            elements.peerIdDisplay.classList.add('loading');
-        }
-
-        const randomId = 'ps-' + Math.random().toString(36).substring(2, 8);
-        
-        try {
-            state.peer = new Peer(randomId, {
-                debug: 1
-            });
-        } catch (e) {
-            state.peer = new Peer({ debug: 1 });
-        }
-
-        state.peer.on('open', (id) => {
-            state.myPeerId = id;
-            if (elements.peerIdDisplay) {
-                elements.peerIdDisplay.textContent = id;
-                elements.peerIdDisplay.classList.remove('loading');
-            }
-            showConnectionStatus('Ready to connect. Share your Peer ID or connect to a remote Peer ID.', 'info');
-
-            // Check if there is an auto-connect URL parameter
-            checkUrlParameters();
-        });
-
-        // Handle incoming connection
-        state.peer.on('connection', (conn) => {
-            setupDataConnection(conn, false);
-        });
-
-        // Peer error handling
-        state.peer.on('error', (err) => {
-            console.error('PeerJS error:', err);
-            let message = 'Connection notice: ' + (err.message || err.type || 'Offline');
-            if (err.type === 'peer-unavailable') {
-                message = 'Remote peer not found or offline. Please check the ID.';
-            } else if (err.type === 'network') {
-                message = 'Network unavailable for signaling server. Try optical QR transfer!';
-            }
-            showConnectionStatus(message, 'info');
-        });
-
-        state.peer.on('disconnected', () => {
-            showConnectionStatus('Disconnected from signaling server.', 'info');
-            if (state.peer && !state.peer.destroyed) {
-                state.peer.reconnect();
-            }
-        });
-    }
-
-    /**
-     * Connect to remote peer by ID
-     */
-    function connectToRemotePeer(remoteId) {
-        if (!remoteId || !remoteId.trim()) {
-            showConnectionStatus('Please enter a valid remote Peer ID.', 'error');
-            return;
-        }
-
-        remoteId = remoteId.trim();
-
-        if (remoteId === state.myPeerId) {
-            showConnectionStatus('Cannot connect to your own Peer ID.', 'error');
-            return;
-        }
-
-        if (!state.peer || state.peer.disconnected) {
-            showConnectionStatus('Signaling connection not ready. Please wait...', 'error');
-            return;
-        }
-
-        showConnectionStatus(`Connecting to ${remoteId}...`, 'info');
-        if (elements.connectBtn) {
-            elements.connectBtn.disabled = true;
-            elements.connectBtn.textContent = 'Connecting...';
-        }
-
-        const conn = state.peer.connect(remoteId, {
-            reliable: true
-        });
-
-        setupDataConnection(conn, true);
-    }
-
-    /**
-     * Set up event listeners for a PeerJS DataConnection
-     */
-    function setupDataConnection(conn, isInitiator) {
-        if (state.connection) {
-            try { state.connection.close(); } catch (e) {}
-        }
-
-        state.connection = conn;
-        state.connectedPeerId = conn.peer;
-
-        conn.on('open', () => {
-            console.log('Connected to peer:', conn.peer);
-            showConnectionStatus('', '');
-            if (elements.connectBtn) {
-                elements.connectBtn.disabled = false;
-                elements.connectBtn.textContent = 'Connect';
-            }
-
-            if (elements.peerStatusText) {
-                elements.peerStatusText.textContent = `Connected: ${conn.peer}`;
-            }
-            if (elements.peerStatusBadge) {
-                elements.peerStatusBadge.classList.remove('disconnected');
-            }
-
-            switchScreen('scanner');
-            showToast(`Connected to peer: ${conn.peer}`, 'success');
-
-            startScanner();
-
-            if (isInitiator && state.scannedItems.length > 0) {
-                sendToPeer({
-                    type: 'SYNC_LIST',
-                    items: state.scannedItems
-                });
-            }
-        });
-
-        conn.on('data', (data) => {
-            handleIncomingData(data);
-        });
-
-        conn.on('close', () => {
-            handlePeerDisconnection('Peer disconnected.');
-        });
-
-        conn.on('error', (err) => {
-            console.error('DataConnection error:', err);
-            showToast('Peer connection error: ' + (err.message || err.type), 'error');
-        });
-    }
-
-    /**
-     * Send payload to connected peer over WebRTC
-     */
-    function sendToPeer(payload) {
-        if (state.connection && state.connection.open) {
-            try {
-                state.connection.send(payload);
-            } catch (e) {
-                console.error('Error sending data to peer:', e);
-            }
-        }
-    }
-
-    /**
-     * Handle incoming data message from remote peer
-     */
-    function handleIncomingData(data) {
-        if (!data || typeof data !== 'object') return;
-
-        switch (data.type) {
-            case 'SCAN':
-                if (data.barcode) {
-                    onBarcodeDetected(data.barcode, data.format, 'peer', data.timestamp);
-                }
-                break;
-
-            case 'SYNC_LIST':
-                if (Array.isArray(data.items)) {
-                    data.items.forEach(remoteItem => {
-                        const exists = state.scannedItems.some(
-                            item => item.id === remoteItem.id || 
-                                   (item.barcode === remoteItem.barcode && item.timestamp === remoteItem.timestamp)
-                        );
-                        if (!exists) {
-                            state.scannedItems.push({
-                                ...remoteItem,
-                                source: 'peer'
-                            });
-                        }
-                    });
-                    state.scannedItems.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-                    updateFabCount();
-                    renderScannedList();
-                    showToast(`Synced ${data.items.length} items from peer`, 'info');
-                }
-                break;
-
-            case 'CLEAR_LIST':
-                state.scannedItems = [];
-                updateFabCount();
-                renderScannedList();
-                if (elements.lastScannedCode) {
-                    elements.lastScannedCode.textContent = 'Scanning...';
-                }
-                showToast('Peer cleared the scanned items list', 'info');
-                break;
-
-            default:
-                console.log('Received unknown message type:', data);
-        }
-    }
-
-    /**
-     * Handle peer disconnection
-     */
-    function handlePeerDisconnection(reason = 'Disconnected') {
-        showToast(reason, 'error');
-        if (elements.peerStatusText) {
-            elements.peerStatusText.textContent = 'Peer disconnected';
-        }
-        if (elements.peerStatusBadge) {
-            elements.peerStatusBadge.classList.add('disconnected');
-        }
-
-        if (elements.connectBtn) {
-            elements.connectBtn.disabled = false;
-            elements.connectBtn.textContent = 'Connect';
-        }
-
-        state.connectedPeerId = null;
-        state.connection = null;
-    }
-
-    /**
-     * Disconnect button handler
-     */
-    function disconnect() {
-        if (state.connection) {
-            try { state.connection.close(); } catch (e) {}
-            state.connection = null;
-        }
-        state.connectedPeerId = null;
-        
-        stopScanner();
-        switchScreen('connection');
-        showConnectionStatus('Disconnected.', 'info');
-        showToast('Disconnected from peer', 'info');
-    }
-
-    /**
-     * Check URL search params for ?connect=<peerId>
-     */
-    function checkUrlParameters() {
-        const params = new URLSearchParams(window.location.search);
-        const connectParam = params.get('connect') || params.get('peer');
-        if (connectParam && connectParam !== state.myPeerId) {
-            if (elements.remotePeerIdInput) {
-                elements.remotePeerIdInput.value = connectParam;
-            }
-            connectToRemotePeer(connectParam);
-        }
-    }
-
-    /**
-     * Copy peer ID or share link to clipboard
-     */
-    async function copyPeerId() {
-        if (!state.myPeerId) {
-            showToast('Peer ID not ready yet', 'error');
-            return;
-        }
-
-        try {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                await navigator.clipboard.writeText(state.myPeerId);
-            } else {
-                const textarea = document.createElement('textarea');
-                textarea.value = state.myPeerId;
-                textarea.style.position = 'fixed';
-                textarea.style.opacity = '0';
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textarea);
-            }
-
-            if (elements.copyPeerIdBtn) {
-                const originalText = elements.copyPeerIdBtn.textContent;
-                elements.copyPeerIdBtn.textContent = 'Copied!';
-                elements.copyPeerIdBtn.classList.add('btn-primary');
-                setTimeout(() => {
-                    elements.copyPeerIdBtn.textContent = originalText;
-                    elements.copyPeerIdBtn.classList.remove('btn-primary');
-                }, 2000);
-            }
-            showToast('Peer ID copied to clipboard!', 'success');
-        } catch (e) {
-            showToast('Failed to copy ID: ' + e.message, 'error');
-        }
-    }
-
-    // =========================================================================
-    // BARCODE SCANNER ENGINE (QUAGGA + NATIVE BARCODE DETECTOR)
-    // =========================================================================
-
-    /**
-     * Start camera stream and barcode scanner
-     */
-    function startScanner() {
-        if (state.isScanning) return;
-        setLoading(true, 'Initializing camera...');
-
-        if ('BarcodeDetector' in window && !state.barcodeDetector) {
-            try {
-                BarcodeDetector.getSupportedFormats().then(supportedFormats => {
-                    state.barcodeDetector = new BarcodeDetector({
-                        formats: supportedFormats || ['code_128', 'code_39', 'ean_13', 'ean_8', 'qr_code', 'upc_a', 'upc_e']
-                    });
-                }).catch(() => {
-                    state.barcodeDetector = new BarcodeDetector();
-                });
-            } catch (e) {
-                console.log('Native BarcodeDetector not available:', e);
-            }
-        }
-
-        if (typeof Quagga === 'undefined') {
-            setLoading(false);
-            showToast('Quagga barcode scanner library is not loaded', 'error');
-            return;
-        }
-
-        const quaggaConfig = {
-            inputStream: {
-                name: 'Live',
-                type: 'LiveStream',
-                target: elements.quaggaContainer,
-                constraints: {
-                    width: { min: 640, ideal: 1280, max: 1920 },
-                    height: { min: 480, ideal: 720, max: 1080 },
-                    facingMode: { ideal: 'environment' },
-                    aspectRatio: { min: 1, max: 2 }
-                }
-            },
-            locator: {
-                patchSize: 'medium',
-                halfSample: true
-            },
-            numOfWorkers: navigator.hardwareConcurrency ? Math.min(navigator.hardwareConcurrency, 4) : 2,
-            frequency: 10,
-            decoder: {
-                readers: [
-                    'code_128_reader',
-                    'ean_reader',
-                    'ean_8_reader',
-                    'code_39_reader',
-                    'code_39_vin_reader',
-                    'codabar_reader',
-                    'upc_reader',
-                    'upc_e_reader',
-                    'i2of5_reader',
-                    '2of5_reader',
-                    'code_93_reader'
-                ]
-            },
-            locate: true
-        };
-
-        Quagga.init(quaggaConfig, (err) => {
-            setLoading(false);
-            if (err) {
-                console.error('Quagga init failed:', err);
-                showToast('Camera initialization failed: ' + (err.message || err.name || err), 'error');
-                return;
-            }
-
-            Quagga.start();
-            state.isScanning = true;
-
-            startNativeBarcodeDetectorLoop();
-        });
-
-        Quagga.onDetected(handleQuaggaDetection);
-    }
-
-    /**
-     * Native BarcodeDetector loop for sub-millisecond detection and 2D/QR code support
-     */
-    function startNativeBarcodeDetectorLoop() {
-        if (!state.barcodeDetector) return;
-        if (state.detectorInterval) clearInterval(state.detectorInterval);
-
-        state.detectorInterval = setInterval(async () => {
-            if (!state.isScanning || !state.barcodeDetector) return;
-            const video = elements.quaggaContainer ? elements.quaggaContainer.querySelector('video') : null;
-            if (!video || video.readyState < 2) return;
-
-            try {
-                const barcodes = await state.barcodeDetector.detect(video);
-                if (barcodes && barcodes.length > 0) {
-                    const detected = barcodes[0];
-                    if (detected.rawValue) {
-                        onBarcodeDetected(detected.rawValue, detected.format || 'BARCODE', 'local');
-                    }
-                }
-            } catch (e) {}
-        }, 150);
-    }
-
-    /**
-     * Stop camera stream and barcode scanner cleanly
-     */
-    function stopScanner() {
-        if (state.detectorInterval) {
-            clearInterval(state.detectorInterval);
-            state.detectorInterval = null;
-        }
-
-        if (typeof Quagga !== 'undefined' && state.isScanning) {
-            try {
-                Quagga.offDetected(handleQuaggaDetection);
-                Quagga.stop();
-            } catch (e) {
-                console.warn('Error stopping Quagga:', e);
-            }
-        }
-
-        if (elements.quaggaContainer) {
-            const video = elements.quaggaContainer.querySelector('video');
-            if (video && video.srcObject) {
-                const tracks = video.srcObject.getTracks();
-                tracks.forEach(track => track.stop());
-                video.srcObject = null;
-            }
-            elements.quaggaContainer.innerHTML = '';
-        }
-
-        state.isScanning = false;
-        state.isTorchOn = false;
-        if (elements.torchBtn) {
-            elements.torchBtn.classList.remove('active');
-            elements.torchBtn.innerHTML = '💡 Torch';
-        }
-    }
-
-    /**
-     * Quagga detection handler
-     */
-    function handleQuaggaDetection(result) {
-        if (!result || !result.codeResult || !result.codeResult.code) return;
-        
-        const code = result.codeResult.code;
-        const format = result.codeResult.format || 'BARCODE';
-
-        if (result.codeResult.startInfo && result.codeResult.startInfo.error > 0.15) {
-            return;
-        }
-
-        onBarcodeDetected(code, format, 'local');
-    }
-
-    /**
-     * Process detected barcode (from local camera or received from peer)
-     */
-    function onBarcodeDetected(code, format = 'BARCODE', source = 'local', explicitTimestamp = null) {
-        if (!code || typeof code !== 'string') return;
-        code = code.trim();
-        if (code.length === 0) return;
-
-        const now = Date.now();
-
-        // Debounce check
-        if (source === 'local') {
-            if (code === state.lastScannedCode && (now - state.lastScanTime < state.scanCooldownMs)) {
-                return;
-            }
-            if (now - state.lastScanTime < state.minScanIntervalMs) {
-                return;
-            }
-        }
-
-        state.lastScannedCode = code;
-        state.lastScanTime = now;
-
-        if (elements.scanBox && source === 'local') {
-            elements.scanBox.classList.add('success');
-            setTimeout(() => {
-                if (elements.scanBox) elements.scanBox.classList.remove('success');
-            }, 500);
-        }
-
-        playScanSound(source === 'peer');
-        if (source === 'local') {
-            triggerHaptic();
-        }
-
-        const dateObj = explicitTimestamp ? new Date(explicitTimestamp) : new Date();
-        const isoTimestamp = dateObj.toISOString();
-        const timeDisplay = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-        if (elements.lastScannedCode) {
-            elements.lastScannedCode.textContent = (source === 'peer' ? '📱 Peer: ' : '🔍 ') + code;
-        }
-        if (elements.lastScannedDisplay) {
-            elements.lastScannedDisplay.classList.add('highlight');
-            setTimeout(() => {
-                if (elements.lastScannedDisplay) elements.lastScannedDisplay.classList.remove('highlight');
-            }, 1000);
-        }
-
-        const item = {
-            id: 'scan_' + dateObj.getTime() + '_' + Math.random().toString(36).substring(2, 6),
-            barcode: code,
-            format: format.toUpperCase().replace(/_/g, ' '),
-            timestamp: isoTimestamp,
-            timeDisplay: timeDisplay,
-            source: source
-        };
-
-        state.scannedItems.unshift(item);
-        updateFabCount();
-        renderScannedList();
-
-        if (source === 'local') {
-            sendToPeer({
-                type: 'SCAN',
-                barcode: code,
-                format: item.format,
-                timestamp: isoTimestamp
-            });
-            showToast(`Scanned: ${code}`, 'success', 2000);
-        } else {
-            showToast(`Received: ${code} from peer`, 'info', 2500);
-        }
-    }
-
-    /**
-     * Toggle camera torch / flashlight
-     */
-    function toggleTorch() {
-        if (!state.isScanning) {
-            showToast('Start scanner to use torch', 'info');
-            return;
-        }
-
-        let track = null;
-
-        if (typeof Quagga !== 'undefined' && Quagga.CameraAccess && Quagga.CameraAccess.getActiveTrack) {
-            track = Quagga.CameraAccess.getActiveTrack();
-        }
-
-        if (!track && elements.quaggaContainer) {
-            const video = elements.quaggaContainer.querySelector('video');
-            if (video && video.srcObject) {
-                const tracks = video.srcObject.getVideoTracks();
-                if (tracks && tracks.length > 0) {
-                    track = tracks[0];
-                }
-            }
-        }
-
-        if (!track) {
-            showToast('No active camera track found', 'error');
-            return;
-        }
-
-        const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-        if (!capabilities.torch) {
-            showToast('Torch is not supported by this camera', 'info');
-            return;
-        }
-
-        const nextTorchState = !state.isTorchOn;
-
-        track.applyConstraints({
-            advanced: [{ torch: nextTorchState }]
-        }).then(() => {
-            state.isTorchOn = nextTorchState;
-            if (elements.torchBtn) {
-                elements.torchBtn.classList.toggle('active', state.isTorchOn);
-                elements.torchBtn.innerHTML = state.isTorchOn ? '🔦 Torch ON' : '💡 Torch';
-            }
-            showToast(state.isTorchOn ? 'Torch turned ON' : 'Torch turned OFF', 'info');
-        }).catch(err => {
-            console.error('Torch error:', err);
-            showToast('Could not toggle torch: ' + err.message, 'error');
-        });
-    }
-
-    // =========================================================================
-    // SCANNED ITEMS LIST & JSON EXPORT
-    // =========================================================================
-
-    /**
-     * Update FAB badge count
-     */
-    function updateFabCount() {
-        if (elements.fabCount) {
-            elements.fabCount.textContent = state.scannedItems.length;
-        }
-    }
-
-    /**
-     * Render the list of scanned barcodes in the modal
-     */
-    function renderScannedList() {
-        if (!elements.scannedList) return;
-
-        if (state.scannedItems.length === 0) {
-            elements.scannedList.innerHTML = `
-                <div class="scanned-empty">
-                    <span class="scanned-empty-icon">📦</span>
-                    <p>No barcodes scanned yet.</p>
-                </div>
-            `;
-            return;
-        }
-
-        elements.scannedList.innerHTML = state.scannedItems.map((item) => `
-            <div class="scanned-item" data-id="${escapeHtml(item.id)}">
-                <div class="scanned-item-info">
-                    <span class="scanned-item-code">${escapeHtml(item.barcode)}</span>
-                    <div class="scanned-item-meta">
-                        <span class="scanned-item-badge ${item.source === 'peer' ? 'peer' : ''}">${escapeHtml(item.source === 'peer' ? 'Peer' : 'You')}</span>
-                        <span class="scanned-item-badge">${escapeHtml(item.format)}</span>
-                        <span>${escapeHtml(item.timeDisplay || '')}</span>
-                    </div>
-                </div>
-                <div class="scanned-item-actions">
-                    <button class="item-action-btn copy-btn" data-barcode="${escapeHtml(item.barcode)}" title="Copy Barcode">📋</button>
-                    <button class="item-action-btn delete item-delete-btn" data-id="${escapeHtml(item.id)}" title="Delete">🗑️</button>
-                </div>
-            </div>
-        `).join('');
-
-        // Attach event listeners to item actions
-        elements.scannedList.querySelectorAll('.copy-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const code = btn.getAttribute('data-barcode');
-                if (code) {
-                    navigator.clipboard.writeText(code).then(() => {
-                        showToast(`Copied barcode: ${code}`, 'success');
-                    }).catch(() => {
-                        showToast('Failed to copy', 'error');
-                    });
-                }
-            });
-        });
-
-        elements.scannedList.querySelectorAll('.item-delete-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const id = btn.getAttribute('data-id');
-                deleteScannedItem(id);
-            });
-        });
-    }
-
-    /**
-     * Delete individual scanned item
-     */
-    function deleteScannedItem(id) {
-        state.scannedItems = state.scannedItems.filter(item => item.id !== id);
-        updateFabCount();
-        renderScannedList();
-    }
-
-    /**
-     * Clear all scanned items
-     */
-    function clearAllScanned() {
-        if (state.scannedItems.length === 0) {
-            showToast('No barcodes to clear', 'info');
-            return;
-        }
-
-        if (!confirm('Are you sure you want to clear all scanned barcodes?')) {
-            return;
-        }
-
-        state.scannedItems = [];
-        updateFabCount();
-        renderScannedList();
-        if (elements.lastScannedCode) {
-            elements.lastScannedCode.textContent = 'Scanning...';
-        }
-
-        sendToPeer({
-            type: 'CLEAR_LIST'
-        });
-
-        showToast('All scanned barcodes cleared', 'info');
-    }
-
-    /**
-     * Export scanned barcodes as a JSON array of { barcode, timestamp } objects
-     */
-    function exportScannedJSON() {
-        if (state.scannedItems.length === 0) {
-            showToast('No barcodes to export', 'info');
-            return;
-        }
-
-        const exportData = state.scannedItems.map(item => ({
-            barcode: item.barcode,
-            timestamp: item.timestamp
-        }));
-
-        const jsonString = JSON.stringify(exportData, null, 2);
-        const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-
-        const now = new Date();
-        const pad = n => String(n).padStart(2, '0');
-        const filename = `barcodes_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.json`;
-
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        showToast(`Exported ${exportData.length} barcodes to JSON file`, 'success');
-    }
-
-    /**
-     * Modal display controls
-     */
-    function openModal() {
-        renderScannedList();
-        if (elements.scannedModal) {
-            elements.scannedModal.classList.add('active');
-        }
-    }
-
-    function closeModal() {
-        if (elements.scannedModal) {
-            elements.scannedModal.classList.remove('active');
-        }
-    }
-
-    /**
-     * Load items imported from peerGrab.html optical transfer
-     */
-    function loadImportedOpticalCodes() {
-        try {
-            const stored = localStorage.getItem('scannedItems');
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    state.scannedItems = parsed;
-                    updateFabCount();
-                    renderScannedList();
-
-                    const hasImported = localStorage.getItem('hasImportedOptical');
-                    if (hasImported === 'true') {
-                        localStorage.removeItem('hasImportedOptical');
-                        showToast(`Loaded ${parsed.length} codes from optical QR transfer!`, 'success', 4000);
-                        if (elements.lastScannedCode && parsed[0]) {
-                            elements.lastScannedCode.textContent = parsed[0].barcode;
-                        }
-                    }
-                }
-            }
-        } catch (e) {
-            console.warn('Error reading stored scannedItems:', e);
-        }
     }
 
     // =========================================================================
@@ -1023,73 +627,72 @@
     // =========================================================================
 
     function bindEvents() {
-        if (elements.copyPeerIdBtn) {
-            elements.copyPeerIdBtn.addEventListener('click', copyPeerId);
+        if (elements.totesInput) {
+            elements.totesInput.addEventListener('input', updateInputCount);
         }
 
-        if (elements.connectBtn) {
-            elements.connectBtn.addEventListener('click', () => {
-                const id = elements.remotePeerIdInput ? elements.remotePeerIdInput.value : '';
-                connectToRemotePeer(id);
-            });
+        if (elements.generateSampleBtn) {
+            elements.generateSampleBtn.addEventListener('click', generate100SampleTotes);
         }
 
-        if (elements.remotePeerIdInput) {
-            elements.remotePeerIdInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    connectToRemotePeer(elements.remotePeerIdInput.value);
+        if (elements.pasteClipboardBtn) {
+            elements.pasteClipboardBtn.addEventListener('click', async () => {
+                try {
+                    const text = await navigator.clipboard.readText();
+                    if (text && elements.totesInput) {
+                        elements.totesInput.value = text;
+                        updateInputCount();
+                        showToast('Pasted from clipboard!', 'success');
+                    }
+                } catch (e) {
+                    showToast('Clipboard access denied. Please paste manually.', 'error');
                 }
             });
         }
 
-        if (elements.fabButton) {
-            elements.fabButton.addEventListener('click', openModal);
-        }
-
-        if (elements.closeModalBtn) {
-            elements.closeModalBtn.addEventListener('click', closeModal);
-        }
-
-        if (elements.scannedModal) {
-            elements.scannedModal.addEventListener('click', (e) => {
-                if (e.target === elements.scannedModal) {
-                    closeModal();
-                }
+        if (elements.clearInputBtn) {
+            elements.clearInputBtn.addEventListener('click', () => {
+                if (elements.totesInput) elements.totesInput.value = '';
+                updateInputCount();
             });
         }
 
-        if (elements.clearScannedBtn) {
-            elements.clearScannedBtn.addEventListener('click', clearAllScanned);
+        if (elements.broadcastSpeedSlider) {
+            elements.broadcastSpeedSlider.addEventListener('input', (e) => {
+                setFps(parseInt(e.target.value, 10));
+            });
         }
 
-        if (elements.exportScannedBtn) {
-            elements.exportScannedBtn.addEventListener('click', exportScannedJSON);
+        if (elements.liveSpeedSlider) {
+            elements.liveSpeedSlider.addEventListener('input', (e) => {
+                setFps(parseInt(e.target.value, 10));
+            });
         }
 
-        if (elements.torchBtn) {
-            elements.torchBtn.addEventListener('click', toggleTorch);
+        if (elements.startBroadcastBtn) {
+            elements.startBroadcastBtn.addEventListener('click', startBroadcast);
         }
 
-        if (elements.disconnectBtn) {
-            elements.disconnectBtn.addEventListener('click', disconnect);
+        if (elements.playPauseBtn) {
+            elements.playPauseBtn.addEventListener('click', togglePlayPause);
         }
+
+        if (elements.nextBtn) elements.nextBtn.addEventListener('click', stepNext);
+        if (elements.prevBtn) elements.prevBtn.addEventListener('click', stepPrev);
+        if (elements.backToInputBtn) elements.backToInputBtn.addEventListener('click', returnToInputScreen);
+
+        if (elements.toggleCamBtn) elements.toggleCamBtn.addEventListener('click', toggleWebcam);
+        if (elements.flipCamBtn) elements.flipCamBtn.addEventListener('click', flipWebcam);
 
         window.addEventListener('beforeunload', () => {
-            if (state.connection) {
-                try { state.connection.close(); } catch (e) {}
-            }
-            if (state.peer) {
-                try { state.peer.destroy(); } catch (e) {}
-            }
+            stopPlayback();
+            stopWebcam();
         });
     }
 
     function init() {
-        setupScanBoxOverlay();
-        setupPeerStatusIndicator();
         bindEvents();
-        loadImportedOpticalCodes();
-        initPeer();
+        updateInputCount();
     }
 
     if (document.readyState === 'loading') {

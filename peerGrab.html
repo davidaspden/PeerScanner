@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PeerScanner - Optical QR Stream Receiver (peerGrab)</title>
+    <title>PeerScanner - Optical QR Receiver (peerGrab)</title>
     <link rel="stylesheet" href="styles.css">
     <script src="qrcode-lib.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
@@ -16,30 +16,37 @@
             <span class="nav-title">PeerScanner</span>
         </div>
         <div class="nav-links">
-            <a href="index.html" class="nav-link">Main Scanner</a>
-            <a href="random.html" class="nav-link">QR Stream Host (random)</a>
-            <a href="peerGrab.html" class="nav-link active">QR Receiver (peerGrab)</a>
+            <a href="index.html" class="nav-link">Host Broadcaster (Totes)</a>
+            <a href="peerGrab.html" class="nav-link active">Client Receiver (peerGrab)</a>
         </div>
     </nav>
 
     <!-- Main Container -->
     <main class="page-container">
-        <header class="page-header">
-            <h1>Optical QR Stream Receiver</h1>
-            <p class="subtitle">Scan the host's animated QR code stream to capture all 100 chunks without WebRTC</p>
-        </header>
+        <!-- ================================================================
+             RECEIVER VIEW: CAMERA + ACK QR + 100-CELL GRID
+             ================================================================ -->
+        <section id="receiverSection" class="receiver-section">
+            <header class="page-header">
+                <h1>Optical QR Stream Receiver</h1>
+                <p class="subtitle">Aim front camera at host stream. Show ACK QR to host webcam to drop captured frames.</p>
+            </header>
 
-        <div class="stream-layout">
-            <!-- Left: Camera Viewfinder -->
-            <section class="card camera-grab-card">
-                <div class="camera-wrapper">
-                    <div id="cameraContainer" class="camera-stream-box">
-                        <video id="grabVideo" playsinline></video>
-                        <canvas id="grabCanvas" style="display: none;"></canvas>
+            <div class="client-layout">
+                <!-- Column 1: Front Camera Viewfinder -->
+                <div class="card client-cam-card">
+                    <div class="section-title-row">
+                        <h3>Front Camera Viewfinder</h3>
+                        <button id="flipClientCamBtn" class="btn btn-secondary btn-sm">🔄 Flip Camera</button>
+                    </div>
+
+                    <div class="camera-stream-box" id="cameraBox">
+                        <video id="clientVideo" playsinline></video>
+                        <canvas id="clientScanCanvas" style="display: none;"></canvas>
                         
                         <!-- Viewfinder Reticle -->
                         <div class="grab-scanner-overlay">
-                            <div class="grab-scan-box" id="grabScanBox">
+                            <div class="grab-scan-box" id="clientScanBox">
                                 <div class="grab-scan-laser"></div>
                             </div>
                         </div>
@@ -47,86 +54,83 @@
                         <!-- Camera Loading Overlay -->
                         <div id="camLoading" class="camera-loading-overlay">
                             <div class="spinner"></div>
-                            <p id="camLoadingText">Starting standard camera...</p>
+                            <p id="camLoadingText">Starting front-facing camera...</p>
+                        </div>
+                    </div>
+
+                    <!-- Last Captured Item Banner -->
+                    <div class="last-grabbed-banner">
+                        <span class="grab-label">Last Captured:</span>
+                        <span id="lastCapturedCode" class="grab-value">Aim at host screen...</span>
+                    </div>
+
+                    <!-- Progress Header -->
+                    <div class="progress-header">
+                        <div class="progress-stat-row">
+                            <span class="progress-title">Captured: <span id="capturedCountText" class="highlight-text">0</span> / <span id="targetTotalText">100</span></span>
+                            <span class="progress-percentage" id="progressPercentText">0%</span>
+                        </div>
+                        <div class="progress-bar-track">
+                            <div class="progress-bar-fill" id="progressBarFill" style="width: 0%;"></div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Last Detected Code Banner -->
-                <div class="last-grabbed-banner">
-                    <span class="grab-label">Last Captured:</span>
-                    <span id="lastGrabbedCode" class="grab-value">Aim camera at host stream...</span>
-                </div>
-
-                <!-- Camera Controls -->
-                <div class="controls-toolbar">
-                    <button id="restartCamBtn" class="btn btn-secondary">🔄 Restart Camera</button>
-                    <button id="grabTorchBtn" class="btn btn-secondary">💡 Torch</button>
-                </div>
-            </section>
-
-            <!-- Right: Chunked Progress & Feedback QR -->
-            <section class="card progress-grab-card">
-                <!-- Overall Progress Header -->
-                <div class="progress-header">
-                    <div class="progress-stat-row">
-                        <span class="progress-title">Transfer Progress</span>
-                        <span class="progress-percentage" id="progressPercent">0%</span>
-                    </div>
-                    <div class="progress-count-text">
-                        <span id="collectedCount">0</span> of <span id="totalTargetCount">100</span> Chunks Captured
-                        <span id="lastChunkStatusBadge" class="last-chunk-badge pending">Awaiting -last marker</span>
-                    </div>
-                    <!-- Linear Progress Bar -->
-                    <div class="progress-bar-track">
-                        <div class="progress-bar-fill" id="progressBarFill" style="width: 0%;"></div>
-                    </div>
-                </div>
-
-                <!-- 100-Block Chunked Progress Matrix -->
-                <div class="chunked-progress-section">
-                    <div class="section-title-row">
-                        <h3>Chunked Chunk Matrix</h3>
-                        <span class="matrix-legend">
-                            <span class="legend-dot ack"></span> Captured
-                            <span class="legend-dot missing"></span> Placeholder
-                        </span>
-                    </div>
-                    <div class="chunked-progress-grid" id="chunkedGrid"></div>
-                </div>
-
-                <!-- Client Feedback QR Code (Show to Host) -->
-                <div class="feedback-qr-section">
-                    <div class="section-title-row">
-                        <h3>Feedback QR Code for Host</h3>
-                        <span class="feedback-tip">Show this to host camera to omit captured frames</span>
-                    </div>
-                    <div class="feedback-qr-wrapper">
-                        <canvas id="feedbackQrCanvas" width="160" height="160"></canvas>
-                        <div class="feedback-qr-info">
-                            <span id="feedbackSummaryText">0 / 100 Chunks ACK'd</span>
-                            <p class="feedback-subtext">Dynamically updates as new chunks arrive</p>
+                <!-- Column 2: Live ACK QR Code & 100-Block Grid -->
+                <div class="card client-ack-card">
+                    <!-- Live ACK QR Code -->
+                    <div class="ack-qr-container">
+                        <div class="section-title-row">
+                            <h3>Live Client ACK QR</h3>
+                            <span class="badge ack-count-badge" id="ackCountBadge">0 ACK'd</span>
+                        </div>
+                        <p class="section-desc">Host webcam scans this to omit parsed frames from loop.</p>
+                        
+                        <div class="ack-canvas-wrapper">
+                            <canvas id="ackCanvas" width="200" height="200"></canvas>
                         </div>
                     </div>
+
+                    <!-- 100-Cell Progress Matrix -->
+                    <div class="chunked-progress-section">
+                        <div class="section-title-row">
+                            <h3>100-Square Progress Grid</h3>
+                            <span class="matrix-legend">
+                                <span class="legend-dot ack"></span> Captured
+                                <span class="legend-dot missing"></span> Missing
+                            </span>
+                        </div>
+                        <div class="chunked-progress-grid compact-grid" id="clientGrid"></div>
+                    </div>
                 </div>
-            </section>
-        </div>
+            </div>
+        </section>
+
+        <!-- ================================================================
+             RESULTS SCREEN (UPON COMPLETING ALL 100 ITEMS)
+             ================================================================ -->
+        <section id="resultsSection" class="results-section" style="display: none;">
+            <header class="page-header">
+                <h1>Transfer Complete! 🎉</h1>
+                <p class="subtitle">All 100 Totes have been successfully received via optical transfer.</p>
+            </header>
+
+            <div class="card results-card">
+                <div class="results-toolbar">
+                    <div class="results-summary">
+                        <span class="results-total-badge" id="resultsTotalBadge">100 Totes Received</span>
+                    </div>
+                    <div class="results-actions">
+                        <button id="exportJsonBtn" class="btn btn-primary">💾 Export JSON</button>
+                        <button id="copyAllBtn" class="btn btn-secondary">📋 Copy All</button>
+                        <button id="scanAgainBtn" class="btn btn-secondary">🔄 Scan Another Batch</button>
+                    </div>
+                </div>
+
+                <div class="scanned-list" id="resultsList"></div>
+            </div>
+        </section>
     </main>
-
-    <!-- Completion Modal Overlay -->
-    <div id="completeModal" class="modal">
-        <div class="modal-content completion-content">
-            <div class="completion-icon">🎉</div>
-            <h2>All 100 Chunks Captured!</h2>
-            <p>Successfully received the full dataset via optical QR transfer.</p>
-            <div class="countdown-badge">
-                Redirecting to Main Scanner in <span id="countdownSec">3</span>s...
-            </div>
-            <div class="modal-footer justify-center">
-                <button id="goToScannerBtn" class="btn btn-primary">Open Main Scanner Now</button>
-            </div>
-        </div>
-    </div>
 
     <script src="peerGrab.js"></script>
 </body>

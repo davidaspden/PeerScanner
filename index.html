@@ -3,10 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PeerScanner - WebRTC Barcode Scanner</title>
+    <title>PeerScanner - Optical Tote Broadcaster</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="qrcode-lib.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
-<body>
+<body class="page-body">
     <!-- Top Navigation Bar -->
     <nav class="top-nav">
         <div class="nav-brand">
@@ -14,93 +16,150 @@
             <span class="nav-title">PeerScanner</span>
         </div>
         <div class="nav-links">
-            <a href="index.html" class="nav-link active">Main Scanner</a>
-            <a href="random.html" class="nav-link">QR Stream Host (random)</a>
-            <a href="peerGrab.html" class="nav-link">QR Receiver (peerGrab)</a>
+            <a href="index.html" class="nav-link active">Host Broadcaster (Totes)</a>
+            <a href="peerGrab.html" class="nav-link">Client Receiver (peerGrab)</a>
         </div>
     </nav>
 
-    <!-- Connection Setup Screen -->
-    <div id="connectionScreen" class="screen active">
-        <div class="connection-container">
-            <h1>PeerScanner</h1>
-            <p class="subtitle">WebRTC Barcode Scanner</p>
-            
-            <div class="connection-form">
-                <div class="form-group">
-                    <label for="peerId">Your Peer ID:</label>
-                    <div class="peer-id-display" id="peerId">Generating...</div>
-                    <button id="copyPeerIdBtn" class="btn btn-secondary">Copy ID</button>
+    <!-- Main Application Container -->
+    <main class="page-container">
+        <!-- ================================================================
+             SCREEN 1: TOTE INPUT & CONFIGURATION
+             ================================================================ -->
+        <section id="inputScreen" class="input-screen-container">
+            <header class="page-header">
+                <h1>Optical Tote Broadcaster</h1>
+                <p class="subtitle">Paste up to 100 Totes / barcodes to stream them optically at 10 FPS</p>
+            </header>
+
+            <div class="card input-card">
+                <div class="input-header-row">
+                    <label for="totesInput" class="input-label">Totes / Barcodes List (one per line):</label>
+                    <span id="toteCountBadge" class="count-badge">0 Totes entered</span>
                 </div>
-                
-                <div class="divider">OR</div>
-                
-                <div class="form-group">
-                    <label for="remotePeerId">Connect to Peer ID:</label>
-                    <input type="text" id="remotePeerId" placeholder="Enter peer ID to connect" class="input-field">
-                    <button id="connectBtn" class="btn btn-primary">Connect</button>
+
+                <textarea id="totesInput" class="totes-textarea" rows="10" placeholder="Paste up to 100 barcodes/Totes here (one per line)...&#10;Example:&#10;TOTE_894210&#10;TOTE_894211&#10;TOTE_894212"></textarea>
+
+                <!-- Action Buttons for Input -->
+                <div class="input-actions-row">
+                    <button id="generateSampleBtn" class="btn btn-secondary">⚡ Generate 100 Sample Totes</button>
+                    <button id="pasteClipboardBtn" class="btn btn-secondary">📋 Paste from Clipboard</button>
+                    <button id="clearInputBtn" class="btn btn-secondary">🗑️ Clear</button>
                 </div>
-                
-                <div id="connectionStatus" class="status-message"></div>
+
+                <!-- Speed Control -->
+                <div class="speed-control-group">
+                    <label for="broadcastSpeedSlider">
+                        Broadcast Speed: <span id="broadcastFpsDisplay" class="highlight-text">10 FPS</span> (<span id="broadcastIntervalDisplay">100ms</span>/frame)
+                    </label>
+                    <input type="range" id="broadcastSpeedSlider" min="1" max="20" value="10" class="slider-input">
+                </div>
+
+                <!-- Launch Button -->
+                <button id="startBroadcastBtn" class="btn btn-primary btn-lg">
+                    🚀 Start QR Broadcast
+                </button>
             </div>
-        </div>
-    </div>
+        </section>
 
-    <!-- Camera & Scanner Screen -->
-    <div id="scannerScreen" class="screen">
-        <div class="camera-container">
-            <div id="quagga-container"></div>
-            <div class="scanner-overlay">
-                <div class="scan-box"></div>
-            </div>
-        </div>
+        <!-- ================================================================
+             SCREEN 2: ACTIVE QR BROADCAST & FEEDBACK SCANNER
+             ================================================================ -->
+        <section id="broadcastScreen" class="broadcast-screen-container" style="display: none;">
+            <header class="page-header">
+                <h1>Optical QR Stream</h1>
+                <p class="subtitle">Broadcasting frames in a continuous loop. ACK'd frames are automatically skipped!</p>
+            </header>
 
-        <!-- Peer Status Badge -->
-        <div id="peerStatusBadge" class="peer-status">
-            <span id="peerStatusText">Connected to peer</span>
-        </div>
+            <div class="stream-layout">
+                <!-- Left: Animated QR Display -->
+                <div class="card qr-display-card">
+                    <div class="qr-canvas-container">
+                        <div class="qr-canvas-wrapper" id="qrWrapper">
+                            <canvas id="broadcastCanvas" width="300" height="300"></canvas>
+                        </div>
+                    </div>
 
-        <!-- Last Scanned Item Display -->
-        <div id="lastScannedDisplay" class="last-scanned">
-            <span id="lastScannedCode">Scanning...</span>
-        </div>
+                    <!-- Current Frame Badge -->
+                    <div class="chunk-badge-info">
+                        <div class="chunk-index" id="frameIndexDisplay">Frame: 1 / 100</div>
+                        <div class="chunk-code-raw" id="frameCodeDisplay">ts0-generating...</div>
+                    </div>
 
-        <!-- Floating Action Button (FAB) -->
-        <button id="fabButton" class="fab">
-            <span class="fab-icon">📋</span>
-            <span class="fab-count" id="fabCount">0</span>
-        </button>
+                    <!-- Playback Controls -->
+                    <div class="controls-toolbar">
+                        <button id="playPauseBtn" class="btn btn-primary">
+                            <span id="playPauseIcon">⏸️</span>
+                            <span id="playPauseText">Pause</span>
+                        </button>
+                        <button id="prevBtn" class="btn btn-secondary">⏮️ Prev</button>
+                        <button id="nextBtn" class="btn btn-secondary">⏭️ Next</button>
+                        <button id="backToInputBtn" class="btn btn-secondary">✏️ Edit Totes</button>
+                    </div>
 
-        <!-- Scanned Items Modal -->
-        <div id="scannedModal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>Scanned Barcodes</h2>
-                    <button id="closeModalBtn" class="close-btn">&times;</button>
+                    <!-- Speed Slider in Broadcast Screen -->
+                    <div class="speed-control-group">
+                        <label for="liveSpeedSlider">
+                            Live Speed: <span id="liveFpsDisplay" class="highlight-text">10 FPS</span> (<span id="liveIntervalDisplay">100ms</span>)
+                        </label>
+                        <input type="range" id="liveSpeedSlider" min="1" max="20" value="10" class="slider-input">
+                    </div>
                 </div>
-                <div id="scannedList" class="scanned-list"></div>
-                <div class="modal-footer">
-                    <button id="clearScannedBtn" class="btn btn-secondary">Clear All</button>
-                    <button id="exportScannedBtn" class="btn btn-primary">Export</button>
+
+                <!-- Right: 100-Cell Transmission Matrix & Webcam ACK Scanner -->
+                <div class="card status-card">
+                    <!-- Stats Grid -->
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <span class="stat-label">Total Totes</span>
+                            <span class="stat-value" id="statTotal">100</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">In Active Loop</span>
+                            <span class="stat-value active-color" id="statActive">100</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">Client ACK'd</span>
+                            <span class="stat-value ack-color" id="statAck">0</span>
+                        </div>
+                    </div>
+
+                    <!-- 100-Square Matrix -->
+                    <div class="matrix-section">
+                        <div class="section-title-row">
+                            <h3>Transmission Matrix (100 Squares)</h3>
+                            <span class="matrix-legend">
+                                <span class="legend-dot active"></span> In Loop
+                                <span class="legend-dot ack"></span> ACK'd
+                                <span class="legend-dot current"></span> Playing
+                            </span>
+                        </div>
+                        <div class="chunk-matrix" id="hostMatrix"></div>
+                    </div>
+
+                    <!-- Integrated Webcam ACK Scanner (Front-facing camera default) -->
+                    <div class="feedback-scanner-section">
+                        <div class="section-title-row">
+                            <h3>Scan Client ACK QR</h3>
+                            <div class="cam-btn-group">
+                                <button id="toggleCamBtn" class="btn btn-secondary btn-sm">📷 Start Webcam</button>
+                                <button id="flipCamBtn" class="btn btn-secondary btn-sm" style="display: none;">🔄 Flip</button>
+                            </div>
+                        </div>
+                        <p class="section-desc">Point your webcam at the client's screen to automatically drop acknowledged Totes from the loop.</p>
+                        
+                        <div id="webcamContainer" class="feedback-cam-container" style="display: none;">
+                            <video id="webcamVideo" playsinline></video>
+                            <canvas id="webcamCanvas" style="display: none;"></canvas>
+                            <div class="feedback-scan-reticle"></div>
+                            <div id="webcamStatusText" class="feedback-status-text">Scanning for client ACK QR...</div>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
+        </section>
+    </main>
 
-        <!-- Bottom Action Bar -->
-        <div class="action-bar">
-            <button id="disconnectBtn" class="btn btn-secondary">Disconnect</button>
-            <button id="torchBtn" class="btn btn-secondary">💡 Torch</button>
-        </div>
-    </div>
-
-    <!-- Loading Indicator -->
-    <div id="loadingIndicator" class="loading-indicator">
-        <div class="spinner"></div>
-        <p>Initializing camera...</p>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
