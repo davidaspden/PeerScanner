@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PeerScanner - Optical Data Receiver</title>
+    <link rel="icon" type="image/svg+xml" href="icon.svg">
     <link rel="stylesheet" href="styles.css">
     <script src="qrcode-lib.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
@@ -11,10 +12,10 @@
 <body class="page-body receiver-body">
     <!-- Top Navigation Bar -->
     <nav class="top-nav">
-        <div class="nav-brand">
-            <span class="nav-logo">📦⚡</span>
+        <a href="index.html" class="nav-brand">
+            <img src="icon.svg" class="nav-logo-img" alt="PeerScanner Logo" width="26" height="26">
             <span class="nav-title">PeerScanner</span>
-        </div>
+        </a>
         <div class="nav-center-badge">
             <div class="found-total-pill">
                 <span class="pill-label">Found:</span>
@@ -22,8 +23,8 @@
             </div>
         </div>
         <div class="nav-links">
-            <a href="index.html" class="nav-link">Host Broadcaster</a>
-            <a href="peerGrab.html" class="nav-link active">Receiver</a>
+            <a href="index.html" class="nav-link">Host</a>
+            <a href="peerGrab.html" class="nav-link active">Client</a>
         </div>
     </nav>
 

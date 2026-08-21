@@ -916,6 +916,10 @@
     }
 
     function init() {
+        // On mobile/tablet screens, assume 1-to-1 functionality
+        if (window.innerWidth <= 768) {
+            setBroadcastMode('interactive');
+        }
         bindEvents();
         updateInputCount();
         updatePlayPauseButton();

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PeerScanner - Optical Data Broadcaster</title>
+    <link rel="icon" type="image/svg+xml" href="icon.svg">
     <link rel="stylesheet" href="styles.css">
     <script src="qrcode-lib.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
@@ -11,14 +12,14 @@
 <body class="page-body host-body">
     <!-- Top Navigation Bar -->
     <nav class="top-nav">
-        <div class="nav-brand">
-            <span class="nav-logo">📦⚡</span>
+        <a href="index.html" class="nav-brand">
+            <img src="icon.svg" class="nav-logo-img" alt="PeerScanner Logo" width="26" height="26">
             <span class="nav-title">PeerScanner</span>
-        </div>
+        </a>
         <div class="nav-links">
             <button id="showReceiverLinkBtn" class="btn btn-secondary btn-sm" title="Show Receiver Link QR for Mobile">📱 Open Receiver QR</button>
-            <a href="index.html" class="nav-link active">Host Broadcaster</a>
-            <a href="peerGrab.html" class="nav-link">Client Receiver</a>
+            <a href="index.html" class="nav-link active">Host</a>
+            <a href="peerGrab.html" class="nav-link">Client</a>
         </div>
     </nav>
 
@@ -91,25 +92,25 @@
         <section id="broadcastScreen" class="broadcast-screen-container" style="display: none;">
             <!-- Always Visible Persistent Speed & Controls Toolbar -->
             <div class="card broadcast-top-bar">
-                <div class="top-bar-left">
-                    <div class="broadcast-title-row">
-                        <h2>QR Stream</h2>
-                        <span class="badge in-loop-badge" id="inLoopBadge">In loop</span>
+                <div class="top-bar-main-row">
+                    <div class="top-bar-title-group">
+                        <div class="broadcast-title-row">
+                            <h2>QR Stream</h2>
+                            <span class="badge in-loop-badge" id="inLoopBadge">In loop</span>
+                        </div>
+                        <div class="live-mode-badge-toggle" id="liveModeToggleBtn" title="Click to toggle between 1-to-1 and Group Broadcast modes">
+                            <span id="liveModeIcon">⚡</span> <span id="liveModeText">1-to-1 Mode (Drop ACK'd)</span> <span class="mode-switch-hint">🔄 Switch</span>
+                        </div>
                     </div>
-                    <!-- Live Mode Switcher -->
-                    <div class="live-mode-badge-toggle" id="liveModeToggleBtn" title="Click to toggle between 1-to-1 and Group Broadcast modes">
-                        <span id="liveModeIcon">⚡</span> <span id="liveModeText">1-to-1 Mode (Drop ACK'd)</span> <span class="mode-switch-hint">🔄 Switch</span>
+
+                    <div class="top-bar-controls-group">
+                        <div class="top-bar-speed-group">
+                            <span class="speed-title">Speed:</span>
+                            <span class="speed-badge"><strong id="liveFpsDisplay">10 FPS</strong> (<span id="liveIntervalDisplay">100ms</span>)</span>
+                            <input type="range" id="liveSpeedSlider" min="1" max="20" value="10" class="slider-input">
+                        </div>
+                        <button id="backToInputBtn" class="btn btn-secondary btn-sm">✏️ Edit</button>
                     </div>
-                </div>
-
-                <div class="top-bar-speed-group">
-                    <span class="speed-title">Speed:</span>
-                    <span class="speed-badge"><strong id="liveFpsDisplay">10 FPS</strong> (<span id="liveIntervalDisplay">100ms</span>)</span>
-                    <input type="range" id="liveSpeedSlider" min="1" max="20" value="10" class="slider-input">
-                </div>
-
-                <div class="top-bar-actions">
-                    <button id="backToInputBtn" class="btn btn-secondary btn-sm">✏️ Edit Barcodes</button>
                 </div>
             </div>
 
@@ -119,7 +120,7 @@
                 <div class="card qr-display-card">
                     <div class="qr-canvas-container">
                         <div class="qr-canvas-wrapper" id="qrWrapper">
-                            <canvas id="broadcastCanvas" width="460" height="460"></canvas>
+                            <canvas id="broadcastCanvas" width="520" height="520"></canvas>
                         </div>
                     </div>
 
@@ -159,20 +160,7 @@
                         </div>
                     </div>
 
-                    <!-- Transmission Matrix -->
-                    <div class="matrix-section">
-                        <div class="section-title-row">
-                            <h3>Transmission Matrix</h3>
-                            <span class="matrix-legend">
-                                <span class="legend-item"><span class="legend-dot active"></span> In Loop</span>
-                                <span class="legend-item" id="ackLegendItem"><span class="legend-dot ack"></span> ACK'd</span>
-                                <span class="legend-item"><span class="legend-dot current"></span> Playing</span>
-                            </span>
-                        </div>
-                        <div class="chunk-matrix" id="hostMatrix"></div>
-                    </div>
-
-                    <!-- Integrated Webcam ACK Scanner (1-to-1 Mode Only) -->
+                    <!-- Integrated Webcam ACK Scanner (1-to-1 Mode Only) - Placed Above Matrix for Mobile! -->
                     <div class="feedback-scanner-section" id="hostWebcamSection">
                         <div class="section-title-row">
                             <h3 id="webcamHeaderTitle">Scan Client ACK QR (1-to-1 Mode)</h3>
@@ -189,6 +177,19 @@
                             <div class="feedback-scan-reticle"></div>
                             <div id="webcamStatusText" class="feedback-status-text">Scanning for client ACK QR...</div>
                         </div>
+                    </div>
+
+                    <!-- Transmission Matrix -->
+                    <div class="matrix-section">
+                        <div class="section-title-row">
+                            <h3>Transmission Matrix</h3>
+                            <span class="matrix-legend">
+                                <span class="legend-item"><span class="legend-dot active"></span> In Loop</span>
+                                <span class="legend-item" id="ackLegendItem"><span class="legend-dot ack"></span> ACK'd</span>
+                                <span class="legend-item"><span class="legend-dot current"></span> Playing</span>
+                            </span>
+                        </div>
+                        <div class="chunk-matrix" id="hostMatrix"></div>
                     </div>
                 </div>
             </div>
