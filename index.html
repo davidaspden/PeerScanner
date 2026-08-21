@@ -30,16 +30,37 @@
         <section id="inputScreen" class="input-screen-container">
             <header class="page-header">
                 <h1>Optical Tote Broadcaster</h1>
-                <p class="subtitle">Paste up to 100 Totes / barcodes to stream them optically at 10 FPS</p>
+                <p class="subtitle">Paste up to 100 Totes to broadcast optically. Choose 1-to-1 or Group Multicast mode.</p>
             </header>
 
             <div class="card input-card">
+                <!-- Mode Selector Toggle -->
+                <div class="mode-selection-box">
+                    <span class="mode-box-label">Transmission Mode:</span>
+                    <div class="mode-toggle-group">
+                        <button type="button" id="modeInteractiveBtn" class="mode-btn active" data-mode="interactive">
+                            <span class="mode-icon">⚡</span>
+                            <div class="mode-text">
+                                <strong>1-to-1 Handshake</strong>
+                                <small>Drop ACK'd frames to speed up 1-on-1 handoff</small>
+                            </div>
+                        </button>
+                        <button type="button" id="modeMulticastBtn" class="mode-btn" data-mode="multicast">
+                            <span class="mode-icon">📢</span>
+                            <div class="mode-text">
+                                <strong>1-to-Many Group Broadcast</strong>
+                                <small>Bingo Mode: Loop all frames for 20+ workers simultaneously</small>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
                 <div class="input-header-row">
                     <label for="totesInput" class="input-label">Totes / Barcodes List (one per line):</label>
                     <span id="toteCountBadge" class="count-badge">0 Totes entered</span>
                 </div>
 
-                <textarea id="totesInput" class="totes-textarea" rows="10" placeholder="Paste up to 100 barcodes/Totes here (one per line)...&#10;Example:&#10;TOTE_894210&#10;TOTE_894211&#10;TOTE_894212"></textarea>
+                <textarea id="totesInput" class="totes-textarea" rows="8" placeholder="Paste up to 100 barcodes/Totes here (one per line)...&#10;Example:&#10;TOTE_894210&#10;TOTE_894211&#10;TOTE_894212"></textarea>
 
                 <!-- Action Buttons for Input -->
                 <div class="input-actions-row">
@@ -70,8 +91,14 @@
             <!-- Always Visible Persistent Speed & Controls Toolbar -->
             <div class="card broadcast-top-bar">
                 <div class="top-bar-left">
-                    <h2>Broadcasting QR Stream</h2>
-                    <span class="badge in-loop-badge" id="inLoopBadge">100 in loop</span>
+                    <div class="broadcast-title-row">
+                        <h2>QR Stream</h2>
+                        <span class="badge in-loop-badge" id="inLoopBadge">100 in loop</span>
+                    </div>
+                    <!-- Live Mode Switcher -->
+                    <div class="live-mode-badge-toggle" id="liveModeToggleBtn" title="Click to toggle between 1-to-1 and Group Broadcast modes">
+                        <span id="liveModeIcon">⚡</span> <span id="liveModeText">1-to-1 Mode (Drop ACK'd)</span> <span class="mode-switch-hint">🔄 Switch</span>
+                    </div>
                 </div>
 
                 <div class="top-bar-speed-group">
@@ -146,15 +173,15 @@
                     </div>
 
                     <!-- Integrated Webcam ACK Scanner -->
-                    <div class="feedback-scanner-section">
+                    <div class="feedback-scanner-section" id="hostWebcamSection">
                         <div class="section-title-row">
-                            <h3>Scan Client ACK QR</h3>
+                            <h3 id="webcamHeaderTitle">Scan Client ACK QR (1-to-1 Mode)</h3>
                             <div class="cam-btn-group">
                                 <button id="toggleCamBtn" class="btn btn-secondary btn-sm">📷 Start Webcam</button>
                                 <button id="flipCamBtn" class="btn btn-secondary btn-sm" style="display: none;">🔄 Flip</button>
                             </div>
                         </div>
-                        <p class="section-desc">Point webcam at client screen to drop acknowledged Totes.</p>
+                        <p class="section-desc" id="webcamDescText">Point webcam at client screen to drop acknowledged Totes.</p>
                         
                         <div id="webcamContainer" class="feedback-cam-container" style="display: none;">
                             <video id="webcamVideo" playsinline></video>

@@ -1,8 +1,7 @@
 /**
  * app.js - Optical Tote Broadcaster & Controller (Host)
- * Accepts pasted Totes/barcodes, chunks into tsX-code items,
- * broadcasts animated QR codes at 10 FPS with persistent speed slider,
- * restart capabilities, and dismissable mobile receiver QR modal.
+ * Supports 1-to-1 Handshake (Auto-Drop ACK'd) and 1-to-Many Multicast (Bingo Mode)
+ * with persistent speed slider, restart capabilities, and mobile receiver QR modal.
  */
 
 (function () {
@@ -19,10 +18,11 @@
         isPlaying: false,
         fps: 10,
         timerId: null,
+        broadcastMode: 'interactive', // 'interactive' | 'multicast'
         
         // Webcam state
         isCamActive: false,
-        currentFacingMode: 'user', // default to front-facing camera
+        currentFacingMode: 'user',
         camStream: null,
         camDetector: null,
         camScanInterval: null
@@ -33,6 +33,16 @@
         // Screens
         inputScreen: document.getElementById('inputScreen'),
         broadcastScreen: document.getElementById('broadcastScreen'),
+        
+        // Mode Controls
+        modeInteractiveBtn: document.getElementById('modeInteractiveBtn'),
+        modeMulticastBtn: document.getElementById('modeMulticastBtn'),
+        liveModeToggleBtn: document.getElementById('liveModeToggleBtn'),
+        liveModeIcon: document.getElementById('liveModeIcon'),
+        liveModeText: document.getElementById('liveModeText'),
+        hostWebcamSection: document.getElementById('hostWebcamSection'),
+        webcamHeaderTitle: document.getElementById('webcamHeaderTitle'),
+        webcamDescText: document.getElementById('webcamDescText'),
         
         // Input Controls
         totesInput: document.getElementById('totesInput'),
@@ -110,6 +120,65 @@
             osc.start(now);
             osc.stop(now + 0.2);
         } catch (e) {}
+    }
+
+    // =========================================================================
+    // MODE MANAGEMENT (1-TO-1 vs 1-TO-MANY MULTICAST)
+    // =========================================================================
+
+    function setBroadcastMode(mode) {
+        state.broadcastMode = mode;
+
+        if (elements.modeInteractiveBtn && elements.modeMulticastBtn) {
+            elements.modeInteractiveBtn.classList.toggle('active', mode === 'interactive');
+            elements.modeMulticastBtn.classList.toggle('active', mode === 'multicast');
+        }
+
+        if (elements.liveModeIcon && elements.liveModeText) {
+            if (mode === 'interactive') {
+                elements.liveModeIcon.textContent = '⚡';
+                elements.liveModeText.textContent = '1-to-1 Mode (Drop ACK\'d)';
+                if (elements.webcamHeaderTitle) elements.webcamHeaderTitle.textContent = 'Scan Client ACK QR (1-to-1 Mode)';
+                if (elements.webcamDescText) elements.webcamDescText.textContent = 'Point webcam at client screen to drop acknowledged Totes.';
+            } else {
+                elements.liveModeIcon.textContent = '📢';
+                elements.liveModeText.textContent = 'Group Multicast (Bingo Mode)';
+                if (elements.webcamHeaderTitle) elements.webcamHeaderTitle.textContent = 'Client Activity Monitor (Group Mode)';
+                if (elements.webcamDescText) elements.webcamDescText.textContent = 'Streaming all frames continuously for 20+ workers simultaneously.';
+            }
+        }
+
+        // Reconstruct activeIndices based on mode
+        const total = state.codes.length;
+        if (total > 0) {
+            if (mode === 'multicast') {
+                // In multicast mode, all frames remain in loop
+                state.activeIndices = [];
+                for (let i = 0; i < total; i++) {
+                    state.activeIndices.push(i);
+                }
+            } else {
+                // In interactive mode, exclude ACK'd items
+                state.activeIndices = [];
+                for (let i = 0; i < total; i++) {
+                    if (!state.ackSet.has(i)) {
+                        state.activeIndices.push(i);
+                    }
+                }
+            }
+            if (state.currentIndexInActive >= state.activeIndices.length) {
+                state.currentIndexInActive = 0;
+            }
+            updateMatrixUI();
+            updateStatsUI();
+            renderCurrentFrame();
+        }
+    }
+
+    function toggleLiveBroadcastMode() {
+        const nextMode = (state.broadcastMode === 'interactive') ? 'multicast' : 'interactive';
+        setBroadcastMode(nextMode);
+        showToast(`Switched to ${nextMode === 'interactive' ? '1-to-1 Handshake (Drop ACK\'d)' : '1-to-Many Group Broadcast (Bingo Mode)'}`, 'info');
     }
 
     function getParsedTotesFromInput() {
@@ -191,13 +260,14 @@
         if (elements.inputScreen) elements.inputScreen.style.display = 'none';
         if (elements.broadcastScreen) elements.broadcastScreen.style.display = 'block';
 
+        setBroadcastMode(state.broadcastMode);
         buildHostMatrixDOM(total);
         updateMatrixUI();
         updateStatsUI();
         renderCurrentFrame();
         startPlayback();
 
-        showToast(`Broadcasting ${total} Totes at ${state.fps} FPS`, 'success');
+        showToast(`Broadcasting ${total} Totes (${state.broadcastMode === 'multicast' ? 'Group Multicast' : '1-to-1 Handshake'})`, 'success');
     }
 
     function restartBroadcast() {
@@ -414,23 +484,31 @@
         if (newAcks > 0) {
             playAckChime();
 
-            // Reconstruct active queue omitting all acknowledged items
-            state.activeIndices = [];
-            for (let i = 0; i < total; i++) {
-                if (!state.ackSet.has(i)) {
-                    state.activeIndices.push(i);
+            // In 1-to-1 Interactive mode: Drop acknowledged items from loop
+            // In Group Multicast mode: Keep all in loop so everyone gets the data!
+            if (state.broadcastMode === 'interactive') {
+                state.activeIndices = [];
+                for (let i = 0; i < total; i++) {
+                    if (!state.ackSet.has(i)) {
+                        state.activeIndices.push(i);
+                    }
                 }
+
+                if (state.currentIndexInActive >= state.activeIndices.length) {
+                    state.currentIndexInActive = 0;
+                }
+
+                updateMatrixUI();
+                updateStatsUI();
+                renderCurrentFrame();
+
+                showToast(`1-to-1 ACK: Dropped ${newAcks} Totes. Remaining: ${state.activeIndices.length}`, 'success');
+            } else {
+                // Multicast Bingo Mode: Record ACK count without dropping from loop
+                updateMatrixUI();
+                updateStatsUI();
+                showToast(`Worker ACK: ${state.ackSet.size} / ${total} Totes confirmed (Broadcast continues)`, 'info');
             }
-
-            if (state.currentIndexInActive >= state.activeIndices.length) {
-                state.currentIndexInActive = 0;
-            }
-
-            updateMatrixUI();
-            updateStatsUI();
-            renderCurrentFrame();
-
-            showToast(`ACK: Dropped ${newAcks} Totes. Remaining: ${state.activeIndices.length}`, 'success');
         }
     }
 
@@ -613,7 +691,7 @@
     }
 
     // =========================================================================
-    // RECEIVER LINK MODAL (SCAN WITH PHONE TO OPEN peerGrab)
+    // RECEIVER LINK MODAL
     // =========================================================================
 
     function getReceiverFullUrl() {
@@ -621,7 +699,6 @@
         if (href.includes('index.html')) {
             return href.replace('index.html', 'peerGrab.html');
         }
-        // Fallback for directory paths
         const base = href.split('?')[0].split('#')[0];
         return base.endsWith('/') ? `${base}peerGrab.html` : `${base}/peerGrab.html`;
     }
@@ -683,6 +760,17 @@
     // =========================================================================
 
     function bindEvents() {
+        // Mode switch buttons on setup screen
+        if (elements.modeInteractiveBtn) {
+            elements.modeInteractiveBtn.addEventListener('click', () => setBroadcastMode('interactive'));
+        }
+        if (elements.modeMulticastBtn) {
+            elements.modeMulticastBtn.addEventListener('click', () => setBroadcastMode('multicast'));
+        }
+        if (elements.liveModeToggleBtn) {
+            elements.liveModeToggleBtn.addEventListener('click', toggleLiveBroadcastMode);
+        }
+
         if (elements.totesInput) {
             elements.totesInput.addEventListener('input', updateInputCount);
         }
