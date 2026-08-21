@@ -423,10 +423,41 @@
             const cell = document.createElement('div');
             cell.className = 'matrix-cell active';
             cell.id = `hostMatrixCell_${i}`;
-            cell.title = `Tote #${i + 1}: ${state.rawTotes[i] || ''}`;
+            cell.title = `Tote #${i + 1}: ${state.rawTotes[i] || ''} (Click to view QR)`;
             cell.textContent = `${i}`;
+
+            // Allow clicking any cell to pause and display that specific QR code
+            cell.addEventListener('click', () => {
+                selectMatrixFrame(i);
+            });
+
             elements.hostMatrix.appendChild(cell);
         }
+    }
+
+    /**
+     * Jump directly to a specific chunk and display its QR code
+     */
+    function selectMatrixFrame(index) {
+        if (index < 0 || index >= state.codes.length) return;
+
+        // Pause playback so the selected frame stays static on screen
+        if (state.isPlaying) {
+            stopPlayback();
+        }
+
+        // Find or set index in active list
+        const activePos = state.activeIndices.indexOf(index);
+        if (activePos !== -1) {
+            state.currentIndexInActive = activePos;
+        } else {
+            // Even if previously ACK'd, allow manually displaying it
+            state.activeIndices.push(index);
+            state.currentIndexInActive = state.activeIndices.length - 1;
+        }
+
+        renderCurrentFrame();
+        showToast(`Viewing Chunk #${index + 1}: ${state.rawTotes[index] || ''}`, 'info', 2000);
     }
 
     function updateMatrixUI() {

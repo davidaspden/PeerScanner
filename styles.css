@@ -783,9 +783,15 @@ body.receiver-body {
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: default;
+    cursor: pointer;
     transition: var(--transition);
     user-select: none;
+}
+
+.matrix-cell:hover {
+    transform: scale(1.18);
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+    z-index: 4;
 }
 
 .matrix-cell.active {
@@ -804,8 +810,8 @@ body.receiver-body {
     background: #eab308 !important;
     color: #000000 !important;
     border: 1px solid #facc15 !important;
-    transform: scale(1.15);
-    box-shadow: 0 0 10px rgba(234, 179, 8, 0.8);
+    transform: scale(1.22);
+    box-shadow: 0 0 12px rgba(234, 179, 8, 0.9);
     z-index: 5;
 }
 
