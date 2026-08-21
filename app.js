@@ -2,7 +2,8 @@
  * PeerScanner - WebRTC Barcode Scanner Application Logic
  * Supports PeerJS peer-to-peer WebRTC data synchronization,
  * QuaggaJS barcode scanning, native BarcodeDetector API,
- * torch controls, sound/haptic feedback, and JSON export.
+ * torch controls, sound/haptic feedback, JSON export,
+ * and seamless loading of optical QR stream data.
  */
 
 (function () {
@@ -252,7 +253,7 @@
      */
     function initPeer() {
         if (typeof Peer === 'undefined') {
-            showConnectionStatus('PeerJS library failed to load. Please check your network.', 'error');
+            showConnectionStatus('PeerJS library failed to load. (Use optical transfer if offline/air-gapped)', 'info');
             return;
         }
 
@@ -261,7 +262,6 @@
             elements.peerIdDisplay.classList.add('loading');
         }
 
-        // Generate a clean 6-character random ID suffix or let PeerJS assign
         const randomId = 'ps-' + Math.random().toString(36).substring(2, 8);
         
         try {
@@ -269,7 +269,6 @@
                 debug: 1
             });
         } catch (e) {
-            // Fallback to automatic ID if custom ID creation fails
             state.peer = new Peer({ debug: 1 });
         }
 
@@ -279,7 +278,7 @@
                 elements.peerIdDisplay.textContent = id;
                 elements.peerIdDisplay.classList.remove('loading');
             }
-            showConnectionStatus('Ready to connect. Share your Peer ID or enter a remote Peer ID.', 'info');
+            showConnectionStatus('Ready to connect. Share your Peer ID or connect to a remote Peer ID.', 'info');
 
             // Check if there is an auto-connect URL parameter
             checkUrlParameters();
@@ -293,18 +292,17 @@
         // Peer error handling
         state.peer.on('error', (err) => {
             console.error('PeerJS error:', err);
-            let message = 'Connection error: ' + (err.message || err.type || 'Unknown');
+            let message = 'Connection notice: ' + (err.message || err.type || 'Offline');
             if (err.type === 'peer-unavailable') {
                 message = 'Remote peer not found or offline. Please check the ID.';
             } else if (err.type === 'network') {
-                message = 'Network error connecting to signaling server.';
+                message = 'Network unavailable for signaling server. Try optical QR transfer!';
             }
-            showConnectionStatus(message, 'error');
-            showToast(message, 'error');
+            showConnectionStatus(message, 'info');
         });
 
         state.peer.on('disconnected', () => {
-            showConnectionStatus('Disconnected from signaling server. Attempting reconnect...', 'error');
+            showConnectionStatus('Disconnected from signaling server.', 'info');
             if (state.peer && !state.peer.destroyed) {
                 state.peer.reconnect();
             }
@@ -349,7 +347,6 @@
      * Set up event listeners for a PeerJS DataConnection
      */
     function setupDataConnection(conn, isInitiator) {
-        // If already connected, close existing
         if (state.connection) {
             try { state.connection.close(); } catch (e) {}
         }
@@ -365,7 +362,6 @@
                 elements.connectBtn.textContent = 'Connect';
             }
 
-            // Update badge text
             if (elements.peerStatusText) {
                 elements.peerStatusText.textContent = `Connected: ${conn.peer}`;
             }
@@ -373,14 +369,11 @@
                 elements.peerStatusBadge.classList.remove('disconnected');
             }
 
-            // Switch to scanner screen
             switchScreen('scanner');
             showToast(`Connected to peer: ${conn.peer}`, 'success');
 
-            // Start camera scanner
             startScanner();
 
-            // Send existing scan list to sync if initiator
             if (isInitiator && state.scannedItems.length > 0) {
                 sendToPeer({
                     type: 'SYNC_LIST',
@@ -431,7 +424,6 @@
 
             case 'SYNC_LIST':
                 if (Array.isArray(data.items)) {
-                    // Merge remote items, avoiding duplicates by id or (barcode + timestamp)
                     data.items.forEach(remoteItem => {
                         const exists = state.scannedItems.some(
                             item => item.id === remoteItem.id || 
@@ -444,7 +436,6 @@
                             });
                         }
                     });
-                    // Sort descending by timestamp
                     state.scannedItems.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
                     updateFabCount();
                     renderScannedList();
@@ -531,7 +522,6 @@
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 await navigator.clipboard.writeText(state.myPeerId);
             } else {
-                // Fallback copy
                 const textarea = document.createElement('textarea');
                 textarea.value = state.myPeerId;
                 textarea.style.position = 'fixed';
@@ -568,7 +558,6 @@
         if (state.isScanning) return;
         setLoading(true, 'Initializing camera...');
 
-        // Initialize native BarcodeDetector if supported
         if ('BarcodeDetector' in window && !state.barcodeDetector) {
             try {
                 BarcodeDetector.getSupportedFormats().then(supportedFormats => {
@@ -636,11 +625,9 @@
             Quagga.start();
             state.isScanning = true;
 
-            // Start native barcode detector loop on video frames if available
             startNativeBarcodeDetectorLoop();
         });
 
-        // Listen for Quagga barcode detection
         Quagga.onDetected(handleQuaggaDetection);
     }
 
@@ -664,14 +651,12 @@
                         onBarcodeDetected(detected.rawValue, detected.format || 'BARCODE', 'local');
                     }
                 }
-            } catch (e) {
-                // Ignore detection frame error
-            }
+            } catch (e) {}
         }, 150);
     }
 
     /**
-     * Stop camera stream and barcode scanner
+     * Stop camera stream and barcode scanner cleanly
      */
     function stopScanner() {
         if (state.detectorInterval) {
@@ -688,7 +673,6 @@
             }
         }
 
-        // Stop all camera media tracks
         if (elements.quaggaContainer) {
             const video = elements.quaggaContainer.querySelector('video');
             if (video && video.srcObject) {
@@ -716,7 +700,6 @@
         const code = result.codeResult.code;
         const format = result.codeResult.format || 'BARCODE';
 
-        // Filter out low-confidence detection if error is high
         if (result.codeResult.startInfo && result.codeResult.startInfo.error > 0.15) {
             return;
         }
@@ -734,7 +717,7 @@
 
         const now = Date.now();
 
-        // Debounce / Cooldown check: prevent duplicate scans in rapid succession
+        // Debounce check
         if (source === 'local') {
             if (code === state.lastScannedCode && (now - state.lastScanTime < state.scanCooldownMs)) {
                 return;
@@ -747,7 +730,6 @@
         state.lastScannedCode = code;
         state.lastScanTime = now;
 
-        // Visual flash & feedback
         if (elements.scanBox && source === 'local') {
             elements.scanBox.classList.add('success');
             setTimeout(() => {
@@ -755,18 +737,15 @@
             }, 500);
         }
 
-        // Sound and haptics
         playScanSound(source === 'peer');
         if (source === 'local') {
             triggerHaptic();
         }
 
-        // Format timestamp
         const dateObj = explicitTimestamp ? new Date(explicitTimestamp) : new Date();
         const isoTimestamp = dateObj.toISOString();
         const timeDisplay = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-        // Update Last Scanned Display
         if (elements.lastScannedCode) {
             elements.lastScannedCode.textContent = (source === 'peer' ? '📱 Peer: ' : '🔍 ') + code;
         }
@@ -777,7 +756,6 @@
             }, 1000);
         }
 
-        // Create scanned item object
         const item = {
             id: 'scan_' + dateObj.getTime() + '_' + Math.random().toString(36).substring(2, 6),
             barcode: code,
@@ -787,12 +765,10 @@
             source: source
         };
 
-        // Add to scanned list (newest first)
         state.scannedItems.unshift(item);
         updateFabCount();
         renderScannedList();
 
-        // Broadcast to remote peer if local scan
         if (source === 'local') {
             sendToPeer({
                 type: 'SCAN',
@@ -817,12 +793,10 @@
 
         let track = null;
 
-        // Try Quagga's active track
         if (typeof Quagga !== 'undefined' && Quagga.CameraAccess && Quagga.CameraAccess.getActiveTrack) {
             track = Quagga.CameraAccess.getActiveTrack();
         }
 
-        // Fallback to video element stream track
         if (!track && elements.quaggaContainer) {
             const video = elements.quaggaContainer.querySelector('video');
             if (video && video.srcObject) {
@@ -840,7 +814,7 @@
 
         const capabilities = track.getCapabilities ? track.getCapabilities() : {};
         if (!capabilities.torch) {
-            showToast('Torch/Flashlight is not supported by this camera', 'info');
+            showToast('Torch is not supported by this camera', 'info');
             return;
         }
 
@@ -960,7 +934,6 @@
             elements.lastScannedCode.textContent = 'Scanning...';
         }
 
-        // Notify peer of clear action
         sendToPeer({
             type: 'CLEAR_LIST'
         });
@@ -977,7 +950,6 @@
             return;
         }
 
-        // Export format: JSON array of barcode and timestamp key-pair objects
         const exportData = state.scannedItems.map(item => ({
             barcode: item.barcode,
             timestamp: item.timestamp
@@ -1018,17 +990,43 @@
         }
     }
 
+    /**
+     * Load items imported from peerGrab.html optical transfer
+     */
+    function loadImportedOpticalCodes() {
+        try {
+            const stored = localStorage.getItem('scannedItems');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    state.scannedItems = parsed;
+                    updateFabCount();
+                    renderScannedList();
+
+                    const hasImported = localStorage.getItem('hasImportedOptical');
+                    if (hasImported === 'true') {
+                        localStorage.removeItem('hasImportedOptical');
+                        showToast(`Loaded ${parsed.length} codes from optical QR transfer!`, 'success', 4000);
+                        if (elements.lastScannedCode && parsed[0]) {
+                            elements.lastScannedCode.textContent = parsed[0].barcode;
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('Error reading stored scannedItems:', e);
+        }
+    }
+
     // =========================================================================
     // EVENT LISTENERS & INITIALIZATION
     // =========================================================================
 
     function bindEvents() {
-        // Copy Peer ID
         if (elements.copyPeerIdBtn) {
             elements.copyPeerIdBtn.addEventListener('click', copyPeerId);
         }
 
-        // Connect Button
         if (elements.connectBtn) {
             elements.connectBtn.addEventListener('click', () => {
                 const id = elements.remotePeerIdInput ? elements.remotePeerIdInput.value : '';
@@ -1036,7 +1034,6 @@
             });
         }
 
-        // Enter key on remote peer ID input
         if (elements.remotePeerIdInput) {
             elements.remotePeerIdInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
@@ -1045,12 +1042,10 @@
             });
         }
 
-        // FAB Modal Toggle
         if (elements.fabButton) {
             elements.fabButton.addEventListener('click', openModal);
         }
 
-        // Modal Close
         if (elements.closeModalBtn) {
             elements.closeModalBtn.addEventListener('click', closeModal);
         }
@@ -1063,7 +1058,6 @@
             });
         }
 
-        // Clear All and Export buttons
         if (elements.clearScannedBtn) {
             elements.clearScannedBtn.addEventListener('click', clearAllScanned);
         }
@@ -1072,17 +1066,14 @@
             elements.exportScannedBtn.addEventListener('click', exportScannedJSON);
         }
 
-        // Torch Button
         if (elements.torchBtn) {
             elements.torchBtn.addEventListener('click', toggleTorch);
         }
 
-        // Disconnect Button
         if (elements.disconnectBtn) {
             elements.disconnectBtn.addEventListener('click', disconnect);
         }
 
-        // Handle window unload / visibility change
         window.addEventListener('beforeunload', () => {
             if (state.connection) {
                 try { state.connection.close(); } catch (e) {}
@@ -1093,15 +1084,14 @@
         });
     }
 
-    // App Initialization
     function init() {
         setupScanBoxOverlay();
         setupPeerStatusIndicator();
         bindEvents();
+        loadImportedOpticalCodes();
         initPeer();
     }
 
-    // Run on DOM ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PeerScanner - Optical QR Stream Host (random)</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+</head>
+<body class="page-body">
+    <!-- Top Navigation Bar -->
+    <nav class="top-nav">
+        <div class="nav-brand">
+            <span class="nav-logo">📦⚡</span>
+            <span class="nav-title">PeerScanner</span>
+        </div>
+        <div class="nav-links">
+            <a href="index.html" class="nav-link">Main Scanner</a>
+            <a href="random.html" class="nav-link active">QR Stream Host (random)</a>
+            <a href="peerGrab.html" class="nav-link">QR Receiver (peerGrab)</a>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <main class="page-container">
+        <header class="page-header">
+            <h1>Optical QR Stream Generator</h1>
+            <p class="subtitle">Broadcasts 100 time-changing QR codes at 10 FPS for air-gapped optical transfer</p>
+        </header>
+
+        <div class="stream-layout">
+            <!-- Left: QR Code Display & Playback Controls -->
+            <section class="card qr-display-card">
+                <div class="qr-canvas-container">
+                    <div class="qr-canvas-wrapper" id="qrWrapper">
+                        <canvas id="qrCanvas" width="300" height="300"></canvas>
+                        <div id="qrLoading" class="qr-loading-overlay">
+                            <div class="spinner"></div>
+                            <p>Generating 100 QR Codes...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Current Chunk Details -->
+                <div class="chunk-badge-info">
+                    <div class="chunk-index" id="chunkIndexDisplay">Frame: 0 / 100</div>
+                    <div class="chunk-code-raw" id="chunkCodeDisplay">ts0-generating...</div>
+                </div>
+
+                <!-- Playback Controls -->
+                <div class="controls-toolbar">
+                    <button id="playPauseBtn" class="btn btn-primary">
+                        <span id="playPauseIcon">⏸️</span>
+                        <span id="playPauseText">Pause</span>
+                    </button>
+                    <button id="prevBtn" class="btn btn-secondary">⏮️ Prev</button>
+                    <button id="nextBtn" class="btn btn-secondary">⏭️ Next</button>
+                    <button id="regenerateBtn" class="btn btn-secondary">🔄 Regenerate</button>
+                </div>
+
+                <!-- Speed Slider -->
+                <div class="speed-control-group">
+                    <label for="speedSlider">
+                        Playback Speed: <span id="fpsValue" class="highlight-text">10 FPS</span> (<span id="intervalValue">100ms</span>/frame)
+                    </label>
+                    <input type="range" id="speedSlider" min="1" max="20" value="10" class="slider-input">
+                </div>
+            </section>
+
+            <!-- Right: Queue Status & Client Feedback Scanner -->
+            <section class="card status-card">
+                <!-- Stats Summary -->
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <span class="stat-label">Total Generated</span>
+                        <span class="stat-value" id="statTotal">100</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-label">Active in Loop</span>
+                        <span class="stat-value active-color" id="statActive">100</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-label">Client ACK'd</span>
+                        <span class="stat-value ack-color" id="statAck">0</span>
+                    </div>
+                </div>
+
+                <!-- Transmission Chunk Matrix (100 blocks) -->
+                <div class="matrix-section">
+                    <div class="section-title-row">
+                        <h3>Chunk Transmission Matrix</h3>
+                        <span class="matrix-legend">
+                            <span class="legend-dot active"></span> In Loop
+                            <span class="legend-dot ack"></span> ACK'd
+                            <span class="legend-dot current"></span> Playing
+                        </span>
+                    </div>
+                    <div class="chunk-matrix" id="chunkMatrix"></div>
+                </div>
+
+                <!-- Client Feedback Scanner (Camera to read client's ACK QR) -->
+                <div class="feedback-scanner-section">
+                    <div class="section-title-row">
+                        <h3>Scan Client Feedback QR</h3>
+                        <button id="toggleFeedbackCamBtn" class="btn btn-secondary btn-sm">📷 Start Camera</button>
+                    </div>
+                    <p class="section-desc">Point your camera at the client screen to auto-drop acknowledged frames from the stream loop.</p>
+                    
+                    <div id="feedbackCamContainer" class="feedback-cam-container" style="display: none;">
+                        <video id="feedbackVideo" playsinline></video>
+                        <canvas id="feedbackCanvas" style="display: none;"></canvas>
+                        <div class="feedback-scan-reticle"></div>
+                        <div id="feedbackScanStatus" class="feedback-status-text">Scanning for client ACK QR...</div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script src="random.js"></script>
+</body>
+</html>

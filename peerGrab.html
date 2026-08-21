@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PeerScanner - Optical QR Stream Receiver (peerGrab)</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+</head>
+<body class="page-body">
+    <!-- Top Navigation Bar -->
+    <nav class="top-nav">
+        <div class="nav-brand">
+            <span class="nav-logo">📦⚡</span>
+            <span class="nav-title">PeerScanner</span>
+        </div>
+        <div class="nav-links">
+            <a href="index.html" class="nav-link">Main Scanner</a>
+            <a href="random.html" class="nav-link">QR Stream Host (random)</a>
+            <a href="peerGrab.html" class="nav-link active">QR Receiver (peerGrab)</a>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <main class="page-container">
+        <header class="page-header">
+            <h1>Optical QR Stream Receiver</h1>
+            <p class="subtitle">Scan the host's animated QR code stream to capture all 100 chunks without WebRTC</p>
+        </header>
+
+        <div class="stream-layout">
+            <!-- Left: Camera Viewfinder -->
+            <section class="card camera-grab-card">
+                <div class="camera-wrapper">
+                    <div id="cameraContainer" class="camera-stream-box">
+                        <video id="grabVideo" playsinline></video>
+                        <canvas id="grabCanvas" style="display: none;"></canvas>
+                        
+                        <!-- Viewfinder Reticle -->
+                        <div class="grab-scanner-overlay">
+                            <div class="grab-scan-box" id="grabScanBox">
+                                <div class="grab-scan-laser"></div>
+                            </div>
+                        </div>
+
+                        <!-- Camera Loading Overlay -->
+                        <div id="camLoading" class="camera-loading-overlay">
+                            <div class="spinner"></div>
+                            <p id="camLoadingText">Starting standard camera...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Last Detected Code Banner -->
+                <div class="last-grabbed-banner">
+                    <span class="grab-label">Last Captured:</span>
+                    <span id="lastGrabbedCode" class="grab-value">Aim camera at host stream...</span>
+                </div>
+
+                <!-- Camera Controls -->
+                <div class="controls-toolbar">
+                    <button id="restartCamBtn" class="btn btn-secondary">🔄 Restart Camera</button>
+                    <button id="grabTorchBtn" class="btn btn-secondary">💡 Torch</button>
+                </div>
+            </section>
+
+            <!-- Right: Chunked Progress & Feedback QR -->
+            <section class="card progress-grab-card">
+                <!-- Overall Progress Header -->
+                <div class="progress-header">
+                    <div class="progress-stat-row">
+                        <span class="progress-title">Transfer Progress</span>
+                        <span class="progress-percentage" id="progressPercent">0%</span>
+                    </div>
+                    <div class="progress-count-text">
+                        <span id="collectedCount">0</span> of <span id="totalTargetCount">100</span> Chunks Captured
+                        <span id="lastChunkStatusBadge" class="last-chunk-badge pending">Awaiting -last marker</span>
+                    </div>
+                    <!-- Linear Progress Bar -->
+                    <div class="progress-bar-track">
+                        <div class="progress-bar-fill" id="progressBarFill" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <!-- 100-Block Chunked Progress Matrix -->
+                <div class="chunked-progress-section">
+                    <div class="section-title-row">
+                        <h3>Chunked Chunk Matrix</h3>
+                        <span class="matrix-legend">
+                            <span class="legend-dot ack"></span> Captured
+                            <span class="legend-dot missing"></span> Placeholder
+                        </span>
+                    </div>
+                    <div class="chunked-progress-grid" id="chunkedGrid"></div>
+                </div>
+
+                <!-- Client Feedback QR Code (Show to Host) -->
+                <div class="feedback-qr-section">
+                    <div class="section-title-row">
+                        <h3>Feedback QR Code for Host</h3>
+                        <span class="feedback-tip">Show this to host camera to omit captured frames</span>
+                    </div>
+                    <div class="feedback-qr-wrapper">
+                        <canvas id="feedbackQrCanvas" width="160" height="160"></canvas>
+                        <div class="feedback-qr-info">
+                            <span id="feedbackSummaryText">0 / 100 Chunks ACK'd</span>
+                            <p class="feedback-subtext">Dynamically updates as new chunks arrive</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Completion Modal Overlay -->
+    <div id="completeModal" class="modal">
+        <div class="modal-content completion-content">
+            <div class="completion-icon">🎉</div>
+            <h2>All 100 Chunks Captured!</h2>
+            <p>Successfully received the full dataset via optical QR transfer.</p>
+            <div class="countdown-badge">
+                Redirecting to Main Scanner in <span id="countdownSec">3</span>s...
+            </div>
+            <div class="modal-footer justify-center">
+                <button id="goToScannerBtn" class="btn btn-primary">Open Main Scanner Now</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="peerGrab.js"></script>
+</body>
+</html>
