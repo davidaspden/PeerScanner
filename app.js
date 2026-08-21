@@ -1,7 +1,8 @@
 /**
  * app.js - Optical Tote Broadcaster & Controller (Host)
- * Supports 1-to-1 Handshake (Auto-Drop ACK'd) and 1-to-Many Multicast (Bingo Mode)
- * with persistent speed slider, restart capabilities, and mobile receiver QR modal.
+ * Supports 1-to-1 Handshake (Auto-Drop ACK'd) and 1-to-Many Multicast (Bingo Mode),
+ * unlimited Tote list processing, disabled step buttons during playback,
+ * matrix cell inspection, and fixed-bottom instruction marquee.
  */
 
 (function () {
@@ -10,7 +11,7 @@
     // State
     const state = {
         rawTotes: [],
-        codes: [], // formatted ts0-tote ... ts99-tote-last
+        codes: [], // formatted ts0-tote ... tsN-tote-last
         qrCanvases: [], // pre-rendered canvas elements
         activeIndices: [], // list of indices remaining in the loop
         ackSet: new Set(), // acknowledged indices
@@ -43,6 +44,8 @@
         hostWebcamSection: document.getElementById('hostWebcamSection'),
         webcamHeaderTitle: document.getElementById('webcamHeaderTitle'),
         webcamDescText: document.getElementById('webcamDescText'),
+        statAckBox: document.getElementById('statAckBox'),
+        ackLegendItem: document.getElementById('ackLegendItem'),
         
         // Input Controls
         totesInput: document.getElementById('totesInput'),
@@ -87,7 +90,6 @@
 
         // Receiver Link Modal
         showReceiverLinkBtn: document.getElementById('showReceiverLinkBtn'),
-        showReceiverModalLiveBtn: document.getElementById('showReceiverModalLiveBtn'),
         receiverLinkModal: document.getElementById('receiverLinkModal'),
         closeReceiverModalBtn: document.getElementById('closeReceiverModalBtn'),
         dismissReceiverModalBtn: document.getElementById('dismissReceiverModalBtn'),
@@ -140,11 +142,22 @@
                 elements.liveModeText.textContent = '1-to-1 Mode (Drop ACK\'d)';
                 if (elements.webcamHeaderTitle) elements.webcamHeaderTitle.textContent = 'Scan Client ACK QR (1-to-1 Mode)';
                 if (elements.webcamDescText) elements.webcamDescText.textContent = 'Point webcam at client screen to drop acknowledged Totes.';
+                
+                // Show ACK counters and webcam in 1-to-1 mode
+                if (elements.hostWebcamSection) elements.hostWebcamSection.style.display = 'flex';
+                if (elements.statAckBox) elements.statAckBox.style.display = 'flex';
+                if (elements.ackLegendItem) elements.ackLegendItem.style.display = 'inline-flex';
             } else {
                 elements.liveModeIcon.textContent = '📢';
                 elements.liveModeText.textContent = 'Group Multicast (Bingo Mode)';
-                if (elements.webcamHeaderTitle) elements.webcamHeaderTitle.textContent = 'Client Activity Monitor (Group Mode)';
-                if (elements.webcamDescText) elements.webcamDescText.textContent = 'Streaming all frames continuously for 20+ workers simultaneously.';
+                
+                // Hide webcam and ACK counters in Group Multicast mode!
+                if (elements.hostWebcamSection) {
+                    stopWebcam();
+                    elements.hostWebcamSection.style.display = 'none';
+                }
+                if (elements.statAckBox) elements.statAckBox.style.display = 'none';
+                if (elements.ackLegendItem) elements.ackLegendItem.style.display = 'none';
             }
         }
 
@@ -152,7 +165,7 @@
         const total = state.codes.length;
         if (total > 0) {
             if (mode === 'multicast') {
-                // In multicast mode, all frames remain in loop
+                // In multicast mode, all frames loop continuously for the group
                 state.activeIndices = [];
                 for (let i = 0; i < total; i++) {
                     state.activeIndices.push(i);
@@ -181,6 +194,9 @@
         showToast(`Switched to ${nextMode === 'interactive' ? '1-to-1 Handshake (Drop ACK\'d)' : '1-to-Many Group Broadcast (Bingo Mode)'}`, 'info');
     }
 
+    /**
+     * Parse Totes input from textarea (supports any arbitrary list size)
+     */
     function getParsedTotesFromInput() {
         const text = elements.totesInput ? elements.totesInput.value.trim() : '';
         if (!text) return [];
@@ -188,8 +204,7 @@
         return text
             .split('\n')
             .map(line => line.trim())
-            .filter(line => line.length > 0)
-            .slice(0, 100);
+            .filter(line => line.length > 0);
     }
 
     function updateInputCount() {
@@ -199,6 +214,9 @@
         }
     }
 
+    /**
+     * Generate 100 sample Totes
+     */
     function generate100SampleTotes() {
         const samples = [];
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -386,11 +404,31 @@
             elements.playPauseText.textContent = 'Pause';
             elements.playPauseBtn.classList.remove('btn-secondary');
             elements.playPauseBtn.classList.add('btn-primary');
+            
+            // Disable step buttons during active playback
+            if (elements.prevBtn) {
+                elements.prevBtn.disabled = true;
+                elements.prevBtn.title = 'Pause to step frames';
+            }
+            if (elements.nextBtn) {
+                elements.nextBtn.disabled = true;
+                elements.nextBtn.title = 'Pause to step frames';
+            }
         } else {
             elements.playPauseIcon.textContent = '▶️';
             elements.playPauseText.textContent = 'Play';
             elements.playPauseBtn.classList.remove('btn-primary');
             elements.playPauseBtn.classList.add('btn-secondary');
+            
+            // Enable step buttons when paused
+            if (elements.prevBtn) {
+                elements.prevBtn.disabled = false;
+                elements.prevBtn.title = 'Step to previous frame';
+            }
+            if (elements.nextBtn) {
+                elements.nextBtn.disabled = false;
+                elements.nextBtn.title = 'Step to next frame';
+            }
         }
     }
 
@@ -412,12 +450,18 @@
     }
 
     // =========================================================================
-    // 100-SQUARE TRANSMISSION MATRIX & STATS
+    // TRANSMISSION MATRIX & INSPECTION
     // =========================================================================
 
     function buildHostMatrixDOM(count) {
         if (!elements.hostMatrix) return;
         elements.hostMatrix.innerHTML = '';
+
+        // Dynamic columns based on count
+        let cols = 10;
+        if (count <= 25) cols = 5;
+        else if (count <= 50) cols = 10;
+        elements.hostMatrix.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
 
         for (let i = 0; i < count; i++) {
             const cell = document.createElement('div');
@@ -426,7 +470,6 @@
             cell.title = `Tote #${i + 1}: ${state.rawTotes[i] || ''} (Click to view QR)`;
             cell.textContent = `${i}`;
 
-            // Allow clicking any cell to pause and display that specific QR code
             cell.addEventListener('click', () => {
                 selectMatrixFrame(i);
             });
@@ -435,23 +478,17 @@
         }
     }
 
-    /**
-     * Jump directly to a specific chunk and display its QR code
-     */
     function selectMatrixFrame(index) {
         if (index < 0 || index >= state.codes.length) return;
 
-        // Pause playback so the selected frame stays static on screen
         if (state.isPlaying) {
             stopPlayback();
         }
 
-        // Find or set index in active list
         const activePos = state.activeIndices.indexOf(index);
         if (activePos !== -1) {
             state.currentIndexInActive = activePos;
         } else {
-            // Even if previously ACK'd, allow manually displaying it
             state.activeIndices.push(index);
             state.currentIndexInActive = state.activeIndices.length - 1;
         }
@@ -466,7 +503,7 @@
             const cell = document.getElementById(`hostMatrixCell_${i}`);
             if (!cell) continue;
 
-            if (state.ackSet.has(i)) {
+            if (state.broadcastMode === 'interactive' && state.ackSet.has(i)) {
                 cell.className = 'matrix-cell ack';
             } else {
                 cell.className = 'matrix-cell active';
@@ -477,7 +514,7 @@
     function highlightActiveMatrixCell(activeIdx) {
         document.querySelectorAll('.matrix-cell.playing').forEach(el => {
             const idx = parseInt(el.textContent, 10);
-            if (state.ackSet.has(idx)) {
+            if (state.broadcastMode === 'interactive' && state.ackSet.has(idx)) {
                 el.className = 'matrix-cell ack';
             } else {
                 el.className = 'matrix-cell active';
@@ -515,8 +552,6 @@
         if (newAcks > 0) {
             playAckChime();
 
-            // In 1-to-1 Interactive mode: Drop acknowledged items from loop
-            // In Group Multicast mode: Keep all in loop so everyone gets the data!
             if (state.broadcastMode === 'interactive') {
                 state.activeIndices = [];
                 for (let i = 0; i < total; i++) {
@@ -534,11 +569,6 @@
                 renderCurrentFrame();
 
                 showToast(`1-to-1 ACK: Dropped ${newAcks} Totes. Remaining: ${state.activeIndices.length}`, 'success');
-            } else {
-                // Multicast Bingo Mode: Record ACK count without dropping from loop
-                updateMatrixUI();
-                updateStatsUI();
-                showToast(`Worker ACK: ${state.ackSet.size} / ${total} Totes confirmed (Broadcast continues)`, 'info');
             }
         }
     }
@@ -791,7 +821,6 @@
     // =========================================================================
 
     function bindEvents() {
-        // Mode switch buttons on setup screen
         if (elements.modeInteractiveBtn) {
             elements.modeInteractiveBtn.addEventListener('click', () => setBroadcastMode('interactive'));
         }
@@ -865,7 +894,6 @@
 
         // Modal triggers
         if (elements.showReceiverLinkBtn) elements.showReceiverLinkBtn.addEventListener('click', showReceiverLinkModal);
-        if (elements.showReceiverModalLiveBtn) elements.showReceiverModalLiveBtn.addEventListener('click', showReceiverLinkModal);
         if (elements.closeReceiverModalBtn) elements.closeReceiverModalBtn.addEventListener('click', hideReceiverLinkModal);
         if (elements.dismissReceiverModalBtn) elements.dismissReceiverModalBtn.addEventListener('click', hideReceiverLinkModal);
 
@@ -884,6 +912,7 @@
     function init() {
         bindEvents();
         updateInputCount();
+        updatePlayPauseButton();
     }
 
     if (document.readyState === 'loading') {
