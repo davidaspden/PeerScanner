@@ -305,7 +305,7 @@
                     card.appendChild(indexBadge);
 
                     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-                    svg.className = 'barcode-svg';
+                    svg.setAttribute('class', 'barcode-svg');
                     card.appendChild(svg);
 
                     elements.container.appendChild(card);
