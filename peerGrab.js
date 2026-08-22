@@ -773,16 +773,21 @@
             } catch (e) {}
 
             if (state.receivedMap.size === 0) {
-                // Generate 100 sample barcodes for instant testing
-                state.totalCount = 100;
-                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-                for (let i = 0; i < 100; i++) {
-                    let randStr = '';
-                    for (let k = 0; k < 6; k++) randStr += chars.charAt(Math.floor(Math.random() * chars.length));
-                    const tote = `BC_${String(i + 1).padStart(3, '0')}_${randStr}`;
-                    state.receivedMap.set(i, { index: i, tote: tote });
-                    state.toteLookup.set(tote, i);
-                    state.toteLookup.set(tote.toUpperCase(), i);
+                // If in explicit test mode (?test=true), generate sample barcodes for quick offline testing
+                const isTestMode = urlParams.get('test') === 'true' || urlParams.get('test') === '1' || window.location.hash.includes('test');
+                if (isTestMode) {
+                    state.totalCount = 100;
+                    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+                    for (let i = 0; i < 100; i++) {
+                        let randStr = '';
+                        for (let k = 0; k < 6; k++) randStr += chars.charAt(Math.floor(Math.random() * chars.length));
+                        const tote = `BC_${String(i + 1).padStart(3, '0')}_${randStr}`;
+                        state.receivedMap.set(i, { index: i, tote: tote });
+                        state.toteLookup.set(tote, i);
+                        state.toteLookup.set(tote.toUpperCase(), i);
+                    }
+                } else {
+                    state.totalCount = 0;
                 }
             }
         }
@@ -1241,6 +1246,15 @@
 
         if (elements.drawerFoundCount) elements.drawerFoundCount.textContent = count;
         if (elements.drawerTotalCount) elements.drawerTotalCount.textContent = total;
+
+        if (total === 0) {
+            elements.findingChecklist.innerHTML = `
+                <div style="padding: 24px 12px; text-align: center; color: var(--text-muted); font-size: 0.85rem; font-style: italic;">
+                    No barcodes currently loaded.<br>Ingest barcodes via the QR broadcast or paste barcodes on the broadcaster.
+                </div>
+            `;
+            return;
+        }
 
         const items = [];
         for (let i = 0; i < state.totalCount; i++) {
