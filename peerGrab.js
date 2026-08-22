@@ -845,13 +845,37 @@
         if (typeof Quagga !== 'undefined') {
             try {
                 const targetEl = document.querySelector('#findingCameraViewport');
+                
+                // Enumerate physical hardware video devices to target rear/front camera by deviceId
+                let videoConstraints = {
+                    facingMode: state.findingFacingMode === 'environment' ? 'environment' : 'user'
+                };
+
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                    if (videoDevices.length > 1) {
+                        const target = videoDevices.find(d => {
+                            const label = (d.label || '').toLowerCase();
+                            if (state.findingFacingMode === 'environment') {
+                                return label.includes('back') || label.includes('rear') || label.includes('environment') || label.includes('0');
+                            } else {
+                                return label.includes('front') || label.includes('user') || label.includes('1');
+                            }
+                        });
+                        if (target && target.deviceId) {
+                            videoConstraints.deviceId = target.deviceId;
+                        }
+                    }
+                } catch (eEnum) {}
+
                 Quagga.init({
                     inputStream: {
                         name: "LiveStream",
                         type: "LiveStream",
                         target: targetEl,
                         constraints: {
-                            facingMode: state.findingFacingMode,
+                            ...videoConstraints,
                             width: { min: 640, ideal: 1280, max: 1920 },
                             height: { min: 480, ideal: 720, max: 1080 }
                         },
