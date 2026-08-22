@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PeerScanner - Code 128 Simulation Testbench</title>
+    <link rel="icon" type="image/svg+xml" href="icon.svg">
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #0b0f19;
+            --bg-card: #151d30;
+            --primary: #38bdf8;
+            --accent: #10b981;
+            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: #f1f5f9;
+            font-family: var(--font-family);
+            min-height: 100vh;
+            padding: 24px 20px 80px;
+        }
+
+        /* Fixed Top-Right Speed Controller */
+        .fixed-speed-panel {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 2000;
+            background: rgba(15, 23, 42, 0.92);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            border-radius: 12px;
+            padding: 12px 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 20px rgba(56, 189, 248, 0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 250px;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .panel-title {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .count-badge {
+            font-size: 0.72rem;
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+            padding: 2px 6px;
+            border-radius: 9999px;
+            font-weight: 600;
+        }
+
+        .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .slider-row input[type="range"] {
+            flex: 1;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        .speed-val {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #e2e8f0;
+            min-width: 45px;
+            text-align: right;
+        }
+
+        .panel-btn-row {
+            display: flex;
+            gap: 6px;
+        }
+
+        .sim-btn {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #f1f5f9;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .sim-btn:hover {
+            background: rgba(255, 255, 255, 0.18);
+        }
+
+        .sim-btn.active {
+            background: #0284c7;
+            border-color: #38bdf8;
+        }
+
+        /* Simulation Header & Layout */
+        .sim-page-header {
+            max-width: 900px;
+            margin: 0 auto 30px;
+            text-align: left;
+        }
+
+        .sim-page-header h1 {
+            font-size: 1.4rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #38bdf8, #60a5fa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 4px;
+        }
+
+        .sim-page-header p {
+            font-size: 0.85rem;
+            color: #94a3b8;
+        }
+
+        /* Barcode Grid Container */
+        .barcode-grid-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 28px 20px;
+            justify-items: center;
+        }
+
+        /* ~2" x 1" Physical Tote Sticker Representation */
+        .barcode-tag-card {
+            background: #ffffff;
+            color: #000000;
+            width: 192px; /* ~2 inches */
+            height: 96px;  /* ~1 inch */
+            border-radius: 4px;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 4px;
+            position: relative;
+            user-select: none;
+            transition: transform 0.3s ease;
+        }
+
+        .barcode-tag-card.rotated-90 {
+            transform: rotate(90deg);
+            margin: 48px 0; /* Extra vertical margin to accommodate 90° rotation bounding box */
+            box-shadow: 0 6px 18px rgba(56, 189, 248, 0.3);
+        }
+
+        .barcode-tag-card.rotated-90::after {
+            content: '90°';
+            position: absolute;
+            top: 2px;
+            right: 4px;
+            font-size: 0.55rem;
+            font-weight: 800;
+            color: #2563eb;
+        }
+
+        .barcode-svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .tag-index-badge {
+            position: absolute;
+            top: 2px;
+            left: 4px;
+            font-size: 0.55rem;
+            font-family: var(--font-mono);
+            font-weight: 700;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Fixed Top-Right Speed & Motion Controller -->
+    <div class="fixed-speed-panel">
+        <div class="panel-header">
+            <span class="panel-title">⚡ Scroll Controller</span>
+            <span class="count-badge" id="barcodeCountBadge">0 Codes</span>
+        </div>
+
+        <div class="slider-row">
+            <input type="range" id="speedSlider" min="0" max="15" step="0.5" value="2">
+            <span class="speed-val" id="speedDisplay">2.0 px</span>
+        </div>
+
+        <div class="panel-btn-row">
+            <button id="playPauseBtn" class="sim-btn active">⏸️ Pause</button>
+            <button id="directionBtn" class="sim-btn">⬇️ Down</button>
+            <button id="rerollRotBtn" class="sim-btn" title="Randomize which barcodes are rotated 90°">🎲 Re-roll</button>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <main>
+        <header class="sim-page-header">
+            <h1>Code 128 Warehouse Physical Simulation</h1>
+            <p>Renders 2" &times; 1" Code 128 tote barcodes with random 90° vertical rotations. Auto-scrolls for physical optical scanning tests.</p>
+        </header>
+
+        <div class="barcode-grid-container" id="barcodeContainer"></div>
+    </main>
+
+    <script>
+        (function() {
+            'use strict';
+
+            const STORAGE_KEY = 'peerScanner_barcodes';
+            let barcodes = [];
+            let scrollSpeed = 2.0;
+            let scrollDirection = 1; // 1 = down, -1 = up
+            let isAutoScrolling = true;
+            let animFrameId = null;
+
+            const elements = {
+                container: document.getElementById('barcodeContainer'),
+                countBadge: document.getElementById('barcodeCountBadge'),
+                speedSlider: document.getElementById('speedSlider'),
+                speedDisplay: document.getElementById('speedDisplay'),
+                playPauseBtn: document.getElementById('playPauseBtn'),
+                directionBtn: document.getElementById('directionBtn'),
+                rerollRotBtn: document.getElementById('rerollRotBtn')
+            };
+
+            function loadBarcodesFromStorage() {
+                try {
+                    const saved = localStorage.getItem(STORAGE_KEY);
+                    if (saved && saved.trim().length > 0) {
+                        barcodes = saved.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+                    }
+                } catch(e) {}
+
+                if (!barcodes || barcodes.length === 0) {
+                    barcodes = generateSampleBarcodes(100);
+                }
+
+                if (elements.countBadge) {
+                    elements.countBadge.textContent = `${barcodes.length} Codes`;
+                }
+            }
+
+            function generateSampleBarcodes(count = 100) {
+                const list = [];
+                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+                for (let i = 1; i <= count; i++) {
+                    let randStr = '';
+                    for (let k = 0; k < 6; k++) {
+                        randStr += chars.charAt(Math.floor(Math.random() * chars.length));
+                    }
+                    const padded = String(i).padStart(3, '0');
+                    list.push(`BC_${padded}_${randStr}`);
+                }
+                return list;
+            }
+
+            function renderBarcodes() {
+                if (!elements.container) return;
+                elements.container.innerHTML = '';
+
+                barcodes.forEach((code, idx) => {
+                    const card = document.createElement('div');
+                    card.className = 'barcode-tag-card';
+
+                    // Randomly rotate ~30% of barcodes 90°
+                    const isRotated = Math.random() < 0.30;
+                    if (isRotated) {
+                        card.classList.add('rotated-90');
+                    }
+
+                    const indexBadge = document.createElement('span');
+                    indexBadge.className = 'tag-index-badge';
+                    indexBadge.textContent = `#${idx + 1}`;
+                    card.appendChild(indexBadge);
+
+                    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    svg.className = 'barcode-svg';
+                    card.appendChild(svg);
+
+                    elements.container.appendChild(card);
+
+                    // Render Code 128 via JsBarcode
+                    try {
+                        JsBarcode(svg, code, {
+                            format: 'CODE128',
+                            width: 1.4,
+                            height: 48,
+                            displayValue: true,
+                            font: 'monospace',
+                            fontSize: 11,
+                            textMargin: 2,
+                            margin: 2,
+                            background: '#ffffff',
+                            lineColor: '#000000'
+                        });
+                    } catch (e) {
+                        console.warn('JsBarcode render error for', code, e);
+                    }
+                });
+            }
+
+            // Continuous Auto-Scroll Loop
+            function autoScrollStep() {
+                if (isAutoScrolling && scrollSpeed > 0) {
+                    window.scrollBy(0, scrollSpeed * scrollDirection);
+
+                    const currentScroll = window.scrollY || window.pageYOffset;
+                    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+
+                    // Bounce direction at boundaries
+                    if (scrollDirection === 1 && currentScroll >= maxScroll - 2) {
+                        scrollDirection = -1;
+                        if (elements.directionBtn) elements.directionBtn.textContent = '⬆️ Up';
+                    } else if (scrollDirection === -1 && currentScroll <= 2) {
+                        scrollDirection = 1;
+                        if (elements.directionBtn) elements.directionBtn.textContent = '⬇️ Down';
+                    }
+                }
+                animFrameId = requestAnimationFrame(autoScrollStep);
+            }
+
+            function togglePlayPause() {
+                isAutoScrolling = !isAutoScrolling;
+                if (elements.playPauseBtn) {
+                    elements.playPauseBtn.textContent = isAutoScrolling ? '⏸️ Pause' : '▶️ Play';
+                    elements.playPauseBtn.classList.toggle('active', isAutoScrolling);
+                }
+            }
+
+            function toggleDirection() {
+                scrollDirection = scrollDirection === 1 ? -1 : 1;
+                if (elements.directionBtn) {
+                    elements.directionBtn.textContent = scrollDirection === 1 ? '⬇️ Down' : '⬆️ Up';
+                }
+            }
+
+            function bindEvents() {
+                if (elements.speedSlider) {
+                    elements.speedSlider.addEventListener('input', (e) => {
+                        scrollSpeed = parseFloat(e.target.value);
+                        if (elements.speedDisplay) elements.speedDisplay.textContent = `${scrollSpeed.toFixed(1)} px`;
+                    });
+                }
+
+                if (elements.playPauseBtn) elements.playPauseBtn.addEventListener('click', togglePlayPause);
+                if (elements.directionBtn) elements.directionBtn.addEventListener('click', toggleDirection);
+                if (elements.rerollRotBtn) elements.rerollRotBtn.addEventListener('click', renderBarcodes);
+
+                // Listen for changes from other tabs in localStorage
+                window.addEventListener('storage', (e) => {
+                    if (e.key === STORAGE_KEY) {
+                        loadBarcodesFromStorage();
+                        renderBarcodes();
+                    }
+                });
+            }
+
+            function init() {
+                loadBarcodesFromStorage();
+                renderBarcodes();
+                bindEvents();
+                animFrameId = requestAnimationFrame(autoScrollStep);
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init);
+            } else {
+                init();
+            }
+        })();
+    </script>
+</body>
+</html>

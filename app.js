@@ -194,6 +194,26 @@
         showToast(`Switched to ${nextMode === 'interactive' ? '1-to-1 Handshake (Drop ACK\'d)' : '1-to-Many Group Broadcast (Bingo Mode)'}`, 'info');
     }
 
+    const STORAGE_KEY = 'peerScanner_barcodes';
+
+    function saveInputToStorage() {
+        if (!elements.totesInput) return;
+        try {
+            localStorage.setItem(STORAGE_KEY, elements.totesInput.value);
+        } catch (e) {}
+    }
+
+    function loadInputFromStorage() {
+        if (!elements.totesInput) return;
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved && saved.trim().length > 0) {
+                elements.totesInput.value = saved;
+                updateInputCount();
+            }
+        } catch (e) {}
+    }
+
     /**
      * Parse Totes input from textarea (supports any arbitrary list size)
      */
@@ -231,6 +251,7 @@
 
         if (elements.totesInput) {
             elements.totesInput.value = samples.join('\n');
+            saveInputToStorage();
             updateInputCount();
         }
         showToast('Generated 100 sample barcodes!', 'info');
@@ -845,12 +866,20 @@
             elements.generateSampleBtn.addEventListener('click', generate100SampleTotes);
         }
 
+        if (elements.totesInput) {
+            elements.totesInput.addEventListener('input', () => {
+                updateInputCount();
+                saveInputToStorage();
+            });
+        }
+
         if (elements.pasteClipboardBtn) {
             elements.pasteClipboardBtn.addEventListener('click', async () => {
                 try {
                     const text = await navigator.clipboard.readText();
                     if (text && elements.totesInput) {
                         elements.totesInput.value = text;
+                        saveInputToStorage();
                         updateInputCount();
                         showToast('Pasted from clipboard!', 'success');
                     }
@@ -863,7 +892,9 @@
         if (elements.clearInputBtn) {
             elements.clearInputBtn.addEventListener('click', () => {
                 if (elements.totesInput) elements.totesInput.value = '';
+                saveInputToStorage();
                 updateInputCount();
+                showToast('Cleared barcode list', 'info');
             });
         }
 
@@ -880,7 +911,10 @@
         }
 
         if (elements.startBroadcastBtn) {
-            elements.startBroadcastBtn.addEventListener('click', startBroadcast);
+            elements.startBroadcastBtn.addEventListener('click', () => {
+                saveInputToStorage();
+                startBroadcast();
+            });
         }
 
         if (elements.restartBroadcastBtn) {
@@ -916,6 +950,9 @@
     }
 
     function init() {
+        // Load saved barcodes from localStorage
+        loadInputFromStorage();
+
         // On mobile/tablet screens, assume 1-to-1 functionality
         if (window.innerWidth <= 768) {
             setBroadcastMode('interactive');
