@@ -730,6 +730,13 @@
             state.findingScanInterval = null;
         }
 
+        if (typeof Quagga !== 'undefined') {
+            try {
+                Quagga.offDetected();
+                Quagga.stop();
+            } catch (e) {}
+        }
+
         if (state.findingCamStream) {
             state.findingCamStream.getTracks().forEach(track => {
                 try { track.stop(); } catch (e) {}
@@ -737,8 +744,12 @@
             state.findingCamStream = null;
         }
 
-        if (elements.findingVideo) {
-            elements.findingVideo.srcObject = null;
+        const container = document.querySelector('#findingCameraViewport');
+        if (container) {
+            const injectedVideos = container.querySelectorAll('video');
+            injectedVideos.forEach(v => {
+                try { v.srcObject = null; } catch(e) {}
+            });
         }
 
         state.isFindingScanning = false;
@@ -749,9 +760,70 @@
     async function startFindingCamera() {
         await stopFindingCamera();
 
+        // 1. Quagga2 Dedicated LiveStream Engine (Multi-threaded Code 128 WebWorkers)
+        if (typeof Quagga !== 'undefined') {
+            try {
+                const targetEl = document.querySelector('#findingCameraViewport');
+                Quagga.init({
+                    inputStream: {
+                        name: "LiveStream",
+                        type: "LiveStream",
+                        target: targetEl,
+                        constraints: {
+                            facingMode: state.findingFacingMode,
+                            width: { min: 640, ideal: 1280, max: 1920 },
+                            height: { min: 480, ideal: 720, max: 1080 }
+                        },
+                        singleChannel: false
+                    },
+                    locator: {
+                        patchSize: "large",
+                        halfSample: true
+                    },
+                    numOfWorkers: (navigator.hardwareConcurrency ? Math.min(4, Math.max(1, navigator.hardwareConcurrency - 1)) : 2),
+                    frequency: 15,
+                    decoder: {
+                        readers: [
+                            {
+                                format: "code_128_reader",
+                                config: {}
+                            }
+                        ],
+                        multiple: false
+                    },
+                    locate: true
+                }, function (err) {
+                    if (err) {
+                        console.error('[Quagga LiveStream] Init error, falling back:', err);
+                        startFindingCameraFallback();
+                        return;
+                    }
+
+                    console.log('[Quagga LiveStream] 🚀 Code 128 Engine Active on', state.findingFacingMode, 'lens!');
+                    Quagga.start();
+                    state.isFindingScanning = true;
+
+                    Quagga.offDetected();
+                    Quagga.onDetected((result) => {
+                        if (!state.isFindingScanning || state.phase !== 'finding') return;
+                        if (result && result.codeResult && result.codeResult.code) {
+                            processPhysicalBarcode(result.codeResult.code);
+                        }
+                    });
+                });
+                return;
+            } catch (eQ) {
+                console.warn('[Quagga LiveStream] Exception, using fallback:', eQ);
+            }
+        }
+
+        // 2. Fallback if Quagga is not available
+        await startFindingCameraFallback();
+    }
+
+    async function startFindingCameraFallback() {
         try {
             let stream = null;
-            // Prefer rear environment camera with HD resolution for physical barcode hunting
             try {
                 stream = await navigator.mediaDevices.getUserMedia({
                     audio: false,
@@ -762,12 +834,9 @@
                     }
                 });
             } catch (errPref) {
-                console.warn('Finding HD camera failed, fallback to standard video:', errPref);
                 stream = await navigator.mediaDevices.getUserMedia({
                     audio: false,
-                    video: {
-                        facingMode: { ideal: state.findingFacingMode }
-                    }
+                    video: { facingMode: { ideal: state.findingFacingMode } }
                 });
             }
 
@@ -776,28 +845,29 @@
             if (elements.findingVideo) {
                 elements.findingVideo.srcObject = stream;
                 if (elements.findingVideo.paused) {
-                    try {
-                        await elements.findingVideo.play();
-                    } catch (e) {
-                        if (e.name !== 'AbortError' && e.name !== 'NotAllowedError') {
-                            console.warn('Finding video play warning:', e);
-                        }
-                    }
+                    try { await elements.findingVideo.play(); } catch (e) {}
                 }
             }
 
             state.isFindingScanning = true;
             await startFindingScanLoop();
         } catch (err) {
-            console.error('Finding camera error:', err);
-            showToast('Finding camera error: ' + (err.message || err.name), 'error');
+            console.error('Finding camera fallback error:', err);
+            showToast('Camera error: ' + (err.message || err.name), 'error');
         }
     }
 
     async function toggleTorch() {
-        if (!state.findingCamStream) return;
+        let track = null;
+        if (typeof Quagga !== 'undefined' && Quagga.CameraAccess) {
+            try {
+                track = Quagga.CameraAccess.getActiveTrack();
+            } catch (e) {}
+        }
+        if (!track && state.findingCamStream) {
+            track = state.findingCamStream.getVideoTracks()[0];
+        }
 
-        const track = state.findingCamStream.getVideoTracks()[0];
         if (!track) return;
 
         try {
@@ -814,7 +884,7 @@
                     elements.findingTorchBtn.classList.toggle('btn-secondary', !state.isTorchOn);
                 }
             } else {
-                showToast('Torch control not available on this browser/lens', 'info', 2000);
+                showToast('Torch control not available on this lens', 'info', 2000);
             }
         } catch (err) {
             console.warn('Torch constraint error:', err);
