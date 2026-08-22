@@ -281,7 +281,81 @@
     }
 
     // =========================================================================
-    // INGESTION CAMERA CONTROLS (FRONT FACING DEFAULT)
+    // ROBUST HARDWARE CAMERA STREAM ACQUISITION
+    // =========================================================================
+
+    async function getMediaStreamForFacingMode(facingMode, isHD = false) {
+        const resConstraint = isHD 
+            ? { width: { ideal: 1920, min: 1280 }, height: { ideal: 1080, min: 720 } } 
+            : { width: { ideal: 640 }, height: { ideal: 480 } };
+        
+        // 1. Try exact facingMode (Forces mobile browsers to switch physical lens)
+        try {
+            return await navigator.mediaDevices.getUserMedia({
+                audio: false,
+                video: {
+                    facingMode: { exact: facingMode },
+                    ...resConstraint
+                }
+            });
+        } catch (e1) {}
+
+        // 2. Try direct facingMode string
+        try {
+            return await navigator.mediaDevices.getUserMedia({
+                audio: false,
+                video: {
+                    facingMode: facingMode,
+                    ...resConstraint
+                }
+            });
+        } catch (e2) {}
+
+        // 3. Enumerate physical device IDs and select matching lens
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(d => d.kind === 'videoinput');
+            if (videoDevices.length > 1) {
+                const target = videoDevices.find(d => {
+                    const label = (d.label || '').toLowerCase();
+                    if (facingMode === 'environment') {
+                        return label.includes('back') || label.includes('rear') || label.includes('environment') || label.includes('0');
+                    } else {
+                        return label.includes('front') || label.includes('user') || label.includes('1');
+                    }
+                });
+                if (target && target.deviceId) {
+                    return await navigator.mediaDevices.getUserMedia({
+                        audio: false,
+                        video: {
+                            deviceId: { exact: target.deviceId },
+                            ...resConstraint
+                        }
+                    });
+                }
+            }
+        } catch (e3) {}
+
+        // 4. Try ideal facingMode
+        try {
+            return await navigator.mediaDevices.getUserMedia({
+                audio: false,
+                video: {
+                    facingMode: { ideal: facingMode },
+                    ...resConstraint
+                }
+            });
+        } catch (e4) {}
+
+        // 5. Generic video stream fallback
+        return await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: true
+        });
+    }
+
+    // =========================================================================
+    // INGESTION CAMERA CONTROLS (FRONT / REAR FACING)
     // =========================================================================
 
     async function stopCamera() {
@@ -318,24 +392,7 @@
         }
 
         try {
-            let stream = null;
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    audio: false,
-                    video: {
-                        facingMode: { ideal: state.currentFacingMode },
-                        width: { ideal: 640 },
-                        height: { ideal: 480 }
-                    }
-                });
-            } catch (errPreferred) {
-                console.warn('Preferred camera facingMode failed, falling back to generic video constraint:', errPreferred);
-                stream = await navigator.mediaDevices.getUserMedia({
-                    audio: false,
-                    video: true
-                });
-            }
-
+            const stream = await getMediaStreamForFacingMode(state.currentFacingMode, false);
             state.camStream = stream;
 
             if (elements.clientVideo) {
@@ -760,86 +817,8 @@
     async function startFindingCamera() {
         await stopFindingCamera();
 
-        // 1. Quagga2 Dedicated LiveStream Engine (Multi-threaded Code 128 WebWorkers)
-        if (typeof Quagga !== 'undefined') {
-            try {
-                const targetEl = document.querySelector('#findingCameraViewport');
-                Quagga.init({
-                    inputStream: {
-                        name: "LiveStream",
-                        type: "LiveStream",
-                        target: targetEl,
-                        constraints: {
-                            facingMode: state.findingFacingMode,
-                            width: { min: 640, ideal: 1280, max: 1920 },
-                            height: { min: 480, ideal: 720, max: 1080 }
-                        },
-                        singleChannel: false
-                    },
-                    locator: {
-                        patchSize: "large",
-                        halfSample: true
-                    },
-                    numOfWorkers: (navigator.hardwareConcurrency ? Math.min(4, Math.max(1, navigator.hardwareConcurrency - 1)) : 2),
-                    frequency: 15,
-                    decoder: {
-                        readers: [
-                            {
-                                format: "code_128_reader",
-                                config: {}
-                            }
-                        ],
-                        multiple: false
-                    },
-                    locate: true
-                }, function (err) {
-                    if (err) {
-                        console.error('[Quagga LiveStream] Init error, falling back:', err);
-                        startFindingCameraFallback();
-                        return;
-                    }
-
-                    console.log('[Quagga LiveStream] 🚀 Code 128 Engine Active on', state.findingFacingMode, 'lens!');
-                    Quagga.start();
-                    state.isFindingScanning = true;
-
-                    Quagga.offDetected();
-                    Quagga.onDetected((result) => {
-                        if (!state.isFindingScanning || state.phase !== 'finding') return;
-                        if (result && result.codeResult && result.codeResult.code) {
-                            processPhysicalBarcode(result.codeResult.code);
-                        }
-                    });
-                });
-                return;
-            } catch (eQ) {
-                console.warn('[Quagga LiveStream] Exception, using fallback:', eQ);
-            }
-        }
-
-        // 2. Fallback if Quagga is not available
-        await startFindingCameraFallback();
-    }
-
-    async function startFindingCameraFallback() {
         try {
-            let stream = null;
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    audio: false,
-                    video: {
-                        facingMode: { ideal: state.findingFacingMode },
-                        width: { ideal: 1920, min: 1280 },
-                        height: { ideal: 1080, min: 720 }
-                    }
-                });
-            } catch (errPref) {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    audio: false,
-                    video: { facingMode: { ideal: state.findingFacingMode } }
-                });
-            }
-
+            const stream = await getMediaStreamForFacingMode(state.findingFacingMode, true);
             state.findingCamStream = stream;
 
             if (elements.findingVideo) {
@@ -852,22 +831,14 @@
             state.isFindingScanning = true;
             await startFindingScanLoop();
         } catch (err) {
-            console.error('Finding camera fallback error:', err);
+            console.error('Finding camera error:', err);
             showToast('Camera error: ' + (err.message || err.name), 'error');
         }
     }
 
     async function toggleTorch() {
-        let track = null;
-        if (typeof Quagga !== 'undefined' && Quagga.CameraAccess) {
-            try {
-                track = Quagga.CameraAccess.getActiveTrack();
-            } catch (e) {}
-        }
-        if (!track && state.findingCamStream) {
-            track = state.findingCamStream.getVideoTracks()[0];
-        }
-
+        if (!state.findingCamStream) return;
+        const track = state.findingCamStream.getVideoTracks()[0];
         if (!track) return;
 
         try {
