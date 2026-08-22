@@ -59,7 +59,6 @@
         // Ingestion Mode Toolbar
         clientMode1to1Btn: document.getElementById('clientMode1to1Btn'),
         clientModeGroupBtn: document.getElementById('clientModeGroupBtn'),
-        floatingFlipCamBtn: document.getElementById('floatingFlipCamBtn'),
         
         // Ingestion Top Panels & Columns
         panelGridContainer: document.getElementById('panelGridContainer'),
@@ -1480,7 +1479,6 @@
         // Ingestion Transmission Mode Buttons
         if (elements.clientMode1to1Btn) elements.clientMode1to1Btn.addEventListener('click', () => setClientTransmissionMode('1to1'));
         if (elements.clientModeGroupBtn) elements.clientModeGroupBtn.addEventListener('click', () => setClientTransmissionMode('group'));
-        if (elements.floatingFlipCamBtn) elements.floatingFlipCamBtn.addEventListener('click', flipCamera);
 
         // Summary Screen Buttons
         if (elements.startFindingBtn) elements.startFindingBtn.addEventListener('click', enterFindingMode);

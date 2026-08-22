@@ -14,7 +14,7 @@
 <body class="page-body receiver-body">
     <!-- Top Navigation Bar -->
     <nav class="top-nav">
-        <a href="index.html" class="nav-brand">
+        <a href="peerGrab.html" class="nav-brand">
             <img src="icon.svg" class="nav-logo-img" alt="PeerScanner Logo" width="26" height="26">
             <span class="nav-title">PeerScanner</span>
         </a>
@@ -25,8 +25,7 @@
             </div>
         </div>
         <div class="nav-links">
-            <a href="index.html" class="nav-link">Host</a>
-            <a href="peerGrab.html" class="nav-link active">Client</a>
+            <span class="nav-badge-pill">Client</span>
         </div>
     </nav>
 
@@ -40,10 +39,10 @@
             <!-- INGESTION MODE SELECTOR & CONTROLS -->
             <div class="view-mode-toolbar">
                 <div class="client-mode-pills">
-                    <button id="clientMode1to1Btn" class="btn btn-sm btn-primary" title="1-to-1 Mode: Front camera + live ACK QR feedback for host webcam">⚡ 1-to-1 (Front + ACK)</button>
-                    <button id="clientModeGroupBtn" class="btn btn-sm btn-secondary" title="Group Mode: Rear camera fullscreen for scanning large broadcast screen">📢 Group (Rear Cam)</button>
+                    <button id="directFindingBtn" class="btn btn-sm btn-secondary" title="Jump directly into Finding Mode">🎯 Find</button>
+                    <button id="clientMode1to1Btn" class="btn btn-sm btn-primary" title="1-to-1 Mode: Front camera + live ACK QR">⚡ 1-to-1</button>
+                    <button id="clientModeGroupBtn" class="btn btn-sm btn-secondary" title="Group Mode: Rear camera fullscreen">📢 Group</button>
                 </div>
-                <button id="directFindingBtn" class="btn btn-sm btn-secondary" title="Jump directly into Code 128 Finding Mode with saved barcodes">🎯 Find Totes</button>
             </div>
 
             <!-- STICKY TOP VIEW: CAMERA + LIVE ACK QR -->
@@ -59,7 +58,6 @@
                                     <div class="grab-scan-laser"></div>
                                 </div>
                             </div>
-                            <button id="floatingFlipCamBtn" class="floating-cam-flip-btn" title="Switch between Front and Rear camera">🔄</button>
                             <div id="camLoading" class="camera-loading-overlay">
                                 <div class="spinner"></div>
                                 <span id="camLoadingText">Starting camera...</span>
