@@ -825,7 +825,7 @@
             }
         }
 
-        console.log('[Finder Scan] Ready! Native 1D Detector:', has1DBarcodeDetector, 'ZXing Reader:', !!state.zxingReader);
+        console.log('[Finder Scan] Ready! Native 1D Detector:', has1DBarcodeDetector, 'Quagga2:', typeof Quagga !== 'undefined', 'ZXing Reader:', !!state.zxingReader);
 
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -846,7 +846,7 @@
 
                     let foundCode = null;
 
-                    // 1. Native Hardware BarcodeDetector (if supported)
+                    // 1. Native Hardware BarcodeDetector (Zero-copy GPU)
                     if (state.findingBarcodeDetector) {
                         try {
                             const barcodes = await state.findingBarcodeDetector.detect(elements.findingVideo);
@@ -861,9 +861,9 @@
                         } catch (eDet) {}
                     }
 
-                    // 2. ZXing Decoder on Square Canvas (Horizontal & Vertical 90°)
-                    if (!foundCode && state.zxingReader) {
-                        const size = Math.min(vWidth, vHeight) * 0.88;
+                    // 2. Prepare high-contrast cropped square canvas
+                    if (!foundCode) {
+                        const size = Math.min(vWidth, vHeight) * 0.90;
                         const cropX = Math.floor((vWidth - size) / 2);
                         const cropY = Math.floor((vHeight - size) / 2);
                         const cropW = Math.floor(size);
@@ -873,15 +873,43 @@
                         canvas.height = cropH;
                         ctx.drawImage(elements.findingVideo, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
-                        // Pass A: Horizontal
-                        try {
-                            const result = state.zxingReader.decodeFromCanvas(canvas);
-                            if (result && result.getText()) {
-                                foundCode = result.getText();
-                            }
-                        } catch (eH) {}
+                        // 3. Quagga2 1D Barcode Engine (Primary JS 1D specialist)
+                        if (typeof Quagga !== 'undefined') {
+                            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                            foundCode = await new Promise((resolve) => {
+                                try {
+                                    Quagga.decodeSingle({
+                                        src: dataUrl,
+                                        numOfWorkers: 0,
+                                        inputStream: { size: Math.max(cropW, cropH) },
+                                        decoder: {
+                                            readers: ["code_128_reader", "code_39_reader"]
+                                        },
+                                        locate: true
+                                    }, function(res) {
+                                        if (res && res.codeResult && res.codeResult.code) {
+                                            resolve(res.codeResult.code);
+                                        } else {
+                                            resolve(null);
+                                        }
+                                    });
+                                } catch(eQ) {
+                                    resolve(null);
+                                }
+                            });
+                        }
 
-                        // Pass B: 90° Rotated for vertical barcodes
+                        // 4. ZXing Decoder Fallback (Pass A: Horizontal)
+                        if (!foundCode && state.zxingReader) {
+                            try {
+                                const result = state.zxingReader.decodeFromCanvas(canvas);
+                                if (result && result.getText()) {
+                                    foundCode = result.getText();
+                                }
+                            } catch (eH) {}
+                        }
+
+                        // 5. Vertical (90° Rotated) Pass for Barcodes on Tote Sides
                         if (!foundCode) {
                             rotatedCanvas.width = cropH;
                             rotatedCanvas.height = cropW;
@@ -891,12 +919,41 @@
                             rotCtx.drawImage(canvas, -cropW / 2, -cropH / 2);
                             rotCtx.restore();
 
-                            try {
-                                const resultRot = state.zxingReader.decodeFromCanvas(rotatedCanvas);
-                                if (resultRot && resultRot.getText()) {
-                                    foundCode = resultRot.getText();
-                                }
-                            } catch (eV) {}
+                            // Quagga2 Rotated Pass
+                            if (typeof Quagga !== 'undefined') {
+                                const rotDataUrl = rotatedCanvas.toDataURL('image/jpeg', 0.85);
+                                foundCode = await new Promise((resolve) => {
+                                    try {
+                                        Quagga.decodeSingle({
+                                            src: rotDataUrl,
+                                            numOfWorkers: 0,
+                                            inputStream: { size: Math.max(cropW, cropH) },
+                                            decoder: {
+                                                readers: ["code_128_reader", "code_39_reader"]
+                                            },
+                                            locate: true
+                                        }, function(res) {
+                                            if (res && res.codeResult && res.codeResult.code) {
+                                                resolve(res.codeResult.code);
+                                            } else {
+                                                resolve(null);
+                                            }
+                                        });
+                                    } catch(eQRot) {
+                                        resolve(null);
+                                    }
+                                });
+                            }
+
+                            // ZXing Rotated Pass
+                            if (!foundCode && state.zxingReader) {
+                                try {
+                                    const resultRot = state.zxingReader.decodeFromCanvas(rotatedCanvas);
+                                    if (resultRot && resultRot.getText()) {
+                                        foundCode = resultRot.getText();
+                                    }
+                                } catch (eV) {}
+                            }
                         }
                     }
 
