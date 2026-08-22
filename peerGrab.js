@@ -24,6 +24,7 @@
         isDrawerVisible: false,
         isScanning: false,
         isFindingScanning: false,
+        isTorchOn: false,
         currentFacingMode: 'user', // Ingestion defaults to front camera
         findingFacingMode: 'environment', // Finding defaults to rear camera
         camStream: null,
@@ -102,6 +103,7 @@
         hudCodePrefix: document.getElementById('hudCodePrefix'),
         hudCodeLast4: document.getElementById('hudCodeLast4'),
         findingListToggleBtn: document.getElementById('findingListToggleBtn'),
+        findingTorchBtn: document.getElementById('findingTorchBtn'),
         findingFlipCamBtn: document.getElementById('findingFlipCamBtn'),
         findingExitBtn: document.getElementById('findingExitBtn'),
         findingListDrawer: document.getElementById('findingListDrawer'),
@@ -712,7 +714,39 @@
         }
     }
 
+    async function toggleTorch() {
+        if (!state.findingCamStream) {
+            showToast('Camera not active', 'info');
+            return;
+        }
+
+        const track = state.findingCamStream.getVideoTracks()[0];
+        if (!track) return;
+
+        try {
+            const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+            if ('torch' in capabilities) {
+                state.isTorchOn = !state.isTorchOn;
+                await track.applyConstraints({
+                    advanced: [{ torch: state.isTorchOn }]
+                });
+
+                if (elements.findingTorchBtn) {
+                    elements.findingTorchBtn.textContent = state.isTorchOn ? '🔦 Torch ON' : '🔦 Torch';
+                    elements.findingTorchBtn.classList.toggle('btn-primary', state.isTorchOn);
+                    elements.findingTorchBtn.classList.toggle('btn-secondary', !state.isTorchOn);
+                }
+            } else {
+                showToast('Camera torch not supported on this browser/lens', 'info');
+            }
+        } catch (err) {
+            console.warn('Torch constraint error:', err);
+            showToast('Unable to activate torch: ' + (err.message || 'Not supported'), 'info');
+        }
+    }
+
     function flipFindingCamera() {
+        state.isTorchOn = false;
         state.findingFacingMode = (state.findingFacingMode === 'environment') ? 'user' : 'environment';
         startFindingCamera();
     }
@@ -1195,6 +1229,7 @@
 
         // Finding Mode Controls
         if (elements.findingListToggleBtn) elements.findingListToggleBtn.addEventListener('click', toggleFindingListDrawer);
+        if (elements.findingTorchBtn) elements.findingTorchBtn.addEventListener('click', toggleTorch);
         if (elements.findingFlipCamBtn) elements.findingFlipCamBtn.addEventListener('click', flipFindingCamera);
         if (elements.findingExitBtn) elements.findingExitBtn.addEventListener('click', exitFindingMode);
         if (elements.closeDrawerBtn) elements.closeDrawerBtn.addEventListener('click', toggleFindingListDrawer);
