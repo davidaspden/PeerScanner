@@ -1622,9 +1622,11 @@ body.receiver-body {
     bottom: 0;
     left: 0;
     width: 100%;
-    max-height: 75vh;
+    max-height: 80vh;
     z-index: 950;
     background: rgba(11, 15, 25, 0.98);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     border-top: 1.5px solid var(--bg-card-border);
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     display: flex;
@@ -1633,6 +1635,16 @@ body.receiver-body {
     padding: 16px;
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.8);
     animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.finding-checklist {
+    max-height: 65vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-right: 4px;
 }
 
 @keyframes slideUp {

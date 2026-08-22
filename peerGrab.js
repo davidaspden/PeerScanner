@@ -1266,7 +1266,12 @@
     function toggleFindingListDrawer() {
         state.isDrawerVisible = !state.isDrawerVisible;
         if (elements.findingListDrawer) {
-            elements.findingListDrawer.style.display = state.isDrawerVisible ? 'flex' : 'none';
+            if (state.isDrawerVisible) {
+                updateFindingChecklist();
+                elements.findingListDrawer.style.display = 'flex';
+            } else {
+                elements.findingListDrawer.style.display = 'none';
+            }
         }
     }
 
@@ -1466,6 +1471,18 @@
         if (elements.findingFlipCamBtn) elements.findingFlipCamBtn.addEventListener('click', flipFindingCamera);
         if (elements.findingExitBtn) elements.findingExitBtn.addEventListener('click', exitFindingMode);
         if (elements.closeDrawerBtn) elements.closeDrawerBtn.addEventListener('click', toggleFindingListDrawer);
+
+        // Top Navigation Pill Click (Instant Drawer Access)
+        if (elements.navProgressPill) {
+            elements.navProgressPill.style.cursor = 'pointer';
+            elements.navProgressPill.addEventListener('click', () => {
+                if (state.phase === 'finding') {
+                    toggleFindingListDrawer();
+                } else if (state.phase === 'results') {
+                    toggleListVisibility();
+                }
+            });
+        }
 
         // Direct Finding Trigger
         const directFindingBtn = document.getElementById('directFindingBtn');
