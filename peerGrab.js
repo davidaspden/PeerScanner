@@ -303,7 +303,8 @@
         }
 
         state.isScanning = false;
-        await new Promise(r => setTimeout(r, 150));
+        // Wait 250ms to allow mobile OS hardware camera driver to fully unbind and release lock
+        await new Promise(r => setTimeout(r, 250));
     }
 
     async function startCamera() {
@@ -729,12 +730,6 @@
             state.findingScanInterval = null;
         }
 
-        if (state.zxingReader && typeof state.zxingReader.reset === 'function') {
-            try {
-                state.zxingReader.reset();
-            } catch (e) {}
-        }
-
         if (state.findingCamStream) {
             state.findingCamStream.getTracks().forEach(track => {
                 try { track.stop(); } catch (e) {}
@@ -747,7 +742,8 @@
         }
 
         state.isFindingScanning = false;
-        await new Promise(r => setTimeout(r, 150));
+        // Wait 250ms to allow mobile OS hardware camera driver to fully unbind and release lock
+        await new Promise(r => setTimeout(r, 250));
     }
 
     async function startFindingCamera() {
@@ -831,6 +827,35 @@
         startFindingCamera();
     }
 
+    function decodeWithQuagga(canvasEl) {
+        return new Promise((resolve) => {
+            if (typeof Quagga === 'undefined') return resolve(null);
+            try {
+                Quagga.decodeSingle({
+                    src: canvasEl,
+                    numOfWorkers: 0,
+                    locator: {
+                        patchSize: "large",
+                        halfSample: true
+                    },
+                    decoder: {
+                        readers: ["code_128_reader"],
+                        multiple: false
+                    },
+                    locate: true
+                }, function(res) {
+                    if (res && res.codeResult && res.codeResult.code) {
+                        resolve(res.codeResult.code);
+                    } else {
+                        resolve(null);
+                    }
+                });
+            } catch (e) {
+                resolve(null);
+            }
+        });
+    }
+
     async function startFindingScanLoop() {
         let has1DBarcodeDetector = false;
 
@@ -868,7 +893,7 @@
         const rotCanvas = document.createElement('canvas');
         const rotCtx = rotCanvas.getContext('2d', { willReadFrequently: true });
 
-        // 3. Controlled Scanning Loop (60ms interval, Hardware BarcodeDetector + ZXing 0°/90°)
+        // 3. Controlled Scanning Loop (60ms interval, Hardware BarcodeDetector + Quagga2 + ZXing 0°/90°)
         state.findingScanInterval = setInterval(async () => {
             if (!state.isFindingScanning || !elements.findingVideo || state.phase !== 'finding') return;
             if (elements.findingVideo.readyState < 2) return;
@@ -890,22 +915,28 @@
                 } catch (eDet) {}
             }
 
-            // Step 2: ZXing Decoder on Raw Video Frame (Horizontal 0°)
-            if (!foundCode && state.zxingReader) {
+            // Step 2: Quagga2 and ZXing Decoders on Raw Uncompressed Video Canvas
+            if (!foundCode) {
                 const vW = elements.findingVideo.videoWidth || 640;
                 const vH = elements.findingVideo.videoHeight || 480;
                 scanCanvas.width = vW;
                 scanCanvas.height = vH;
                 scanCtx.drawImage(elements.findingVideo, 0, 0, vW, vH);
 
-                try {
-                    const resA = state.zxingReader.decodeFromCanvas(scanCanvas);
-                    if (resA && resA.getText()) {
-                        foundCode = resA.getText();
-                    }
-                } catch (eA) {}
+                // Quagga2 1D Specialist Pass (Horizontal 0°)
+                if (typeof Quagga !== 'undefined') {
+                    foundCode = await decodeWithQuagga(scanCanvas);
+                }
 
-                // Step 3: ZXing Decoder 90° Rotated for Vertical Tote Barcodes
+                // ZXing Fallback Pass (Horizontal 0°)
+                if (!foundCode && state.zxingReader) {
+                    try {
+                        const resA = state.zxingReader.decodeFromCanvas(scanCanvas);
+                        if (resA && resA.getText()) foundCode = resA.getText();
+                    } catch (eA) {}
+                }
+
+                // Step 3: Vertical 90° Rotated for Vertical Tote Barcodes
                 if (!foundCode) {
                     rotCanvas.width = vH;
                     rotCanvas.height = vW;
@@ -915,12 +946,18 @@
                     rotCtx.drawImage(scanCanvas, -vW / 2, -vH / 2);
                     rotCtx.restore();
 
-                    try {
-                        const resB = state.zxingReader.decodeFromCanvas(rotCanvas);
-                        if (resB && resB.getText()) {
-                            foundCode = resB.getText();
-                        }
-                    } catch (eB) {}
+                    // Quagga2 Rotated Pass (Vertical 90°)
+                    if (typeof Quagga !== 'undefined') {
+                        foundCode = await decodeWithQuagga(rotCanvas);
+                    }
+
+                    // ZXing Rotated Pass (Vertical 90°)
+                    if (!foundCode && state.zxingReader) {
+                        try {
+                            const resB = state.zxingReader.decodeFromCanvas(rotCanvas);
+                            if (resB && resB.getText()) foundCode = resB.getText();
+                        } catch (eB) {}
+                    }
                 }
             }
 
@@ -929,7 +966,7 @@
             }
         }, 60);
 
-        console.log('[Finder Scan] Ready! Hardware Code 128 Detector:', has1DBarcodeDetector, 'ZXing Code 128 Reader:', !!state.zxingReader);
+        console.log('[Finder Scan] Ready! Hardware Detector:', has1DBarcodeDetector, 'Quagga2:', typeof Quagga !== 'undefined', 'ZXing Reader:', !!state.zxingReader);
     }
 
     function processPhysicalBarcode(rawText) {
