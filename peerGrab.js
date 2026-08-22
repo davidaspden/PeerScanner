@@ -339,7 +339,15 @@
 
             if (elements.clientVideo) {
                 elements.clientVideo.srcObject = stream;
-                await elements.clientVideo.play().catch(e => console.warn('Video play warning:', e));
+                if (elements.clientVideo.paused) {
+                    try {
+                        await elements.clientVideo.play();
+                    } catch (e) {
+                        if (e.name !== 'AbortError' && e.name !== 'NotAllowedError') {
+                            console.warn('Video play warning:', e);
+                        }
+                    }
+                }
             }
 
             state.isScanning = true;
@@ -771,7 +779,15 @@
 
             if (elements.findingVideo) {
                 elements.findingVideo.srcObject = stream;
-                await elements.findingVideo.play().catch(e => console.warn('Finding video play warning:', e));
+                if (elements.findingVideo.paused) {
+                    try {
+                        await elements.findingVideo.play();
+                    } catch (e) {
+                        if (e.name !== 'AbortError' && e.name !== 'NotAllowedError') {
+                            console.warn('Finding video play warning:', e);
+                        }
+                    }
+                }
             }
 
             state.isFindingScanning = true;

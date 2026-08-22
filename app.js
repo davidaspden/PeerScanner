@@ -688,7 +688,15 @@
 
             if (elements.webcamVideo) {
                 elements.webcamVideo.srcObject = stream;
-                await elements.webcamVideo.play();
+                if (elements.webcamVideo.paused) {
+                    try {
+                        await elements.webcamVideo.play();
+                    } catch (e) {
+                        if (e.name !== 'AbortError' && e.name !== 'NotAllowedError') {
+                            console.warn('Webcam video play warning:', e);
+                        }
+                    }
+                }
             }
 
             if (elements.toggleCamBtn) {
