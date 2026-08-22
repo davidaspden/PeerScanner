@@ -861,17 +861,16 @@
                         } catch (eDet) {}
                     }
 
-                    // 2. Prepare high-contrast cropped square canvas
+                    // 2. Prepare high-contrast cropped square canvas (covers 94% of viewfinder, normalized to 640px)
                     if (!foundCode) {
-                        const size = Math.min(vWidth, vHeight) * 0.90;
+                        const size = Math.min(vWidth, vHeight) * 0.94;
                         const cropX = Math.floor((vWidth - size) / 2);
                         const cropY = Math.floor((vHeight - size) / 2);
-                        const cropW = Math.floor(size);
-                        const cropH = Math.floor(size);
+                        const targetDim = Math.min(640, Math.floor(size));
 
-                        canvas.width = cropW;
-                        canvas.height = cropH;
-                        ctx.drawImage(elements.findingVideo, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+                        canvas.width = targetDim;
+                        canvas.height = targetDim;
+                        ctx.drawImage(elements.findingVideo, cropX, cropY, size, size, 0, 0, targetDim, targetDim);
 
                         // 3. Quagga2 1D Barcode Engine (Locked strictly to Code 128 with checksum validation)
                         if (typeof Quagga !== 'undefined') {

@@ -1456,12 +1456,12 @@ body.receiver-body {
 
 .finding-reticle-box {
     position: relative;
-    width: 86%;
-    max-width: 380px;
-    height: 300px; /* Doubled height for large square targeting zone */
-    border: 2px solid rgba(56, 189, 248, 0.75);
-    border-radius: var(--radius-md);
-    box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.45), 0 0 25px rgba(56, 189, 248, 0.35);
+    width: 92%;
+    max-width: 440px;
+    height: 380px; /* Wide, expansive full-viewport targeting zone */
+    border: 2px solid rgba(56, 189, 248, 0.8);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.4), 0 0 28px rgba(56, 189, 248, 0.35);
     display: flex;
     align-items: center;
     justify-content: center;
