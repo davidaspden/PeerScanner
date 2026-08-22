@@ -475,7 +475,7 @@
                     val |= (1 << b);
                 }
             }
-            hex += val.toString(16);
+            hex += val.toString(16).toUpperCase();
         }
         return `ACK:H:${hex}`;
     }
@@ -494,15 +494,15 @@
         }
 
         if (count === 0) {
-            elements.ackCanvas.width = 220;
-            elements.ackCanvas.height = 220;
+            elements.ackCanvas.width = 180;
+            elements.ackCanvas.height = 180;
             const ctx = elements.ackCanvas.getContext('2d');
             ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, 220, 220);
+            ctx.fillRect(0, 0, 180, 180);
             ctx.fillStyle = '#64748b';
             ctx.font = 'bold 13px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('Awaiting scans...', 110, 115);
+            ctx.fillText('Awaiting scans...', 90, 95);
             return;
         }
 
@@ -510,14 +510,21 @@
 
         if (window.QRCodeLib && window.QRCodeLib.drawToCanvas) {
             try {
+                // Force Version 2 (25x25) with Level L for big, coarse, chunky scan modules
                 window.QRCodeLib.drawToCanvas(elements.ackCanvas, payload, {
-                    width: 220,
-                    height: 220,
+                    typeNumber: 2,
+                    width: 180,
+                    height: 180,
                     margin: 1,
                     errorCorrectionLevel: 'L'
                 });
             } catch (e) {
-                console.warn('ACK QR draw error:', e);
+                window.QRCodeLib.drawToCanvas(elements.ackCanvas, payload, {
+                    width: 180,
+                    height: 180,
+                    margin: 1,
+                    errorCorrectionLevel: 'L'
+                });
             }
         }
     }
