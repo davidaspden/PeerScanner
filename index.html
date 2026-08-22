@@ -65,7 +65,10 @@
 
                 <!-- Action Buttons for Input -->
                 <div class="input-actions-row">
-                    <button id="generateSampleBtn" class="btn btn-secondary">⚡ Generate 100 Barcodes</button>
+                    <div id="testGeneratorBox" class="test-generator-box" style="display: none;">
+                        <input type="number" id="testRandomCountInput" min="1" max="1000" value="100" class="test-count-input" title="Define random count">
+                        <button id="generateSampleBtn" class="btn btn-secondary">⚡ Generate Random</button>
+                    </div>
                     <button id="pasteClipboardBtn" class="btn btn-secondary">📋 Paste from Clipboard</button>
                     <button id="clearInputBtn" class="btn btn-secondary">🗑️ Clear</button>
                 </div>

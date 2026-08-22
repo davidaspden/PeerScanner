@@ -37,23 +37,20 @@
              ================================================================ -->
         <section id="receiverSection" class="receiver-section-layout">
             
-            <!-- VIEW MODE TOGGLES (SPLIT / MAX QR / MAX CAMERA / DIRECT FIND) -->
+            <!-- INGESTION MODE SELECTOR & CONTROLS -->
             <div class="view-mode-toolbar">
-                <button id="viewSplitBtn" class="btn btn-sm btn-primary" title="Show camera and ACK QR side by side">🔲 Split View</button>
-                <button id="viewMaxAckBtn" class="btn btn-sm btn-secondary" title="Maximize ACK QR for host webcam">⚡ Maximize ACK QR</button>
-                <button id="viewMaxCamBtn" class="btn btn-sm btn-secondary" title="Maximize Camera viewfinder">📷 Maximize Camera</button>
-                <button id="flipClientCamBtn" class="btn btn-sm btn-secondary" title="Switch between front and rear cameras">🔄 Flip</button>
+                <div class="client-mode-pills">
+                    <button id="clientMode1to1Btn" class="btn btn-sm btn-primary" title="1-to-1 Mode: Front camera + live ACK QR feedback for host webcam">⚡ 1-to-1 (Front + ACK)</button>
+                    <button id="clientModeGroupBtn" class="btn btn-sm btn-secondary" title="Group Mode: Rear camera fullscreen for scanning large broadcast screen">📢 Group (Rear Cam)</button>
+                </div>
                 <button id="directFindingBtn" class="btn btn-sm btn-secondary" title="Jump directly into Code 128 Finding Mode with saved barcodes">🎯 Find Totes</button>
             </div>
 
             <!-- STICKY TOP VIEW: CAMERA + LIVE ACK QR -->
             <div class="sticky-top-panel card">
-                <div class="top-panel-grid mode-split" id="panelGridContainer">
+                <div class="top-panel-grid mode-1to1" id="panelGridContainer">
                     <!-- Column 1: Camera Viewfinder -->
-                    <div class="cam-panel-column" id="camPanelCol" title="Tap to maximize camera viewfinder">
-                        <div class="panel-header-mini">
-                            <span class="panel-tag">📷 Camera Viewfinder</span>
-                        </div>
+                    <div class="cam-panel-column" id="camPanelCol">
                         <div class="camera-stream-box" id="cameraBox">
                             <video id="clientVideo" playsinline autoplay muted></video>
                             <canvas id="clientScanCanvas" style="display: none;"></canvas>
@@ -62,6 +59,7 @@
                                     <div class="grab-scan-laser"></div>
                                 </div>
                             </div>
+                            <button id="floatingFlipCamBtn" class="floating-cam-flip-btn" title="Switch between Front and Rear camera">🔄</button>
                             <div id="camLoading" class="camera-loading-overlay">
                                 <div class="spinner"></div>
                                 <span id="camLoadingText">Starting camera...</span>
@@ -69,8 +67,8 @@
                         </div>
                     </div>
 
-                    <!-- Column 2: Live ACK QR Code -->
-                    <div class="ack-panel-column" id="ackPanelCol" title="Tap to maximize ACK QR code">
+                    <!-- Column 2: Live ACK QR Code (Hidden in Group Mode) -->
+                    <div class="ack-panel-column" id="ackPanelCol">
                         <div class="panel-header-mini">
                             <span class="panel-tag">⚡ Live ACK QR</span>
                             <span class="badge ack-count-badge" id="ackCountBadge">0 / 100</span>
@@ -78,7 +76,7 @@
                         <div class="ack-canvas-box" id="ackCanvasBox">
                             <canvas id="ackCanvas" width="180" height="180"></canvas>
                         </div>
-                        <span class="ack-helper-text" id="ackHelperText">Point this at host webcam (1-to-1 mode)</span>
+                        <span class="ack-helper-text" id="ackHelperText">Point at host webcam</span>
                     </div>
                 </div>
 

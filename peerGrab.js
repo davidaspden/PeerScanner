@@ -55,11 +55,10 @@
         resultsSection: document.getElementById('resultsSection'),
         findingSection: document.getElementById('findingSection'),
         
-        // View Mode Toolbar (Ingestion)
-        viewSplitBtn: document.getElementById('viewSplitBtn'),
-        viewMaxAckBtn: document.getElementById('viewMaxAckBtn'),
-        viewMaxCamBtn: document.getElementById('viewMaxCamBtn'),
-        flipClientCamBtn: document.getElementById('flipClientCamBtn'),
+        // Ingestion Mode Toolbar
+        clientMode1to1Btn: document.getElementById('clientMode1to1Btn'),
+        clientModeGroupBtn: document.getElementById('clientModeGroupBtn'),
+        floatingFlipCamBtn: document.getElementById('floatingFlipCamBtn'),
         
         // Ingestion Top Panels & Columns
         panelGridContainer: document.getElementById('panelGridContainer'),
@@ -188,41 +187,50 @@
     }
 
     // =========================================================================
-    // INGESTION VIEW MODE MANAGEMENT
+    // INGESTION TRANSMISSION MODE MANAGEMENT (1-to-1 Handshake vs Group Multicast)
     // =========================================================================
 
-    function setViewMode(mode) {
-        state.viewMode = mode;
+    function setClientTransmissionMode(mode) {
+        state.clientTransmissionMode = mode; // '1to1' or 'group'
 
-        if (elements.panelGridContainer) {
-            elements.panelGridContainer.classList.remove('mode-split', 'mode-max-ack', 'mode-max-cam');
-            elements.panelGridContainer.classList.add(`mode-${mode}`);
+        if (mode === '1to1') {
+            state.clientFacingMode = 'user'; // Front camera for desk-based 1-to-1 handshake
+            if (elements.clientMode1to1Btn) {
+                elements.clientMode1to1Btn.classList.add('btn-primary');
+                elements.clientMode1to1Btn.classList.remove('btn-secondary');
+            }
+            if (elements.clientModeGroupBtn) {
+                elements.clientModeGroupBtn.classList.remove('btn-primary');
+                elements.clientModeGroupBtn.classList.add('btn-secondary');
+            }
+            if (elements.panelGridContainer) {
+                elements.panelGridContainer.classList.remove('mode-group');
+                elements.panelGridContainer.classList.add('mode-1to1');
+            }
+            if (elements.ackPanelCol) {
+                elements.ackPanelCol.style.display = 'flex';
+            }
+        } else {
+            state.clientFacingMode = 'environment'; // Rear camera for scanning large group broadcast screen
+            if (elements.clientModeGroupBtn) {
+                elements.clientModeGroupBtn.classList.add('btn-primary');
+                elements.clientModeGroupBtn.classList.remove('btn-secondary');
+            }
+            if (elements.clientMode1to1Btn) {
+                elements.clientMode1to1Btn.classList.remove('btn-primary');
+                elements.clientMode1to1Btn.classList.add('btn-secondary');
+            }
+            if (elements.panelGridContainer) {
+                elements.panelGridContainer.classList.remove('mode-1to1');
+                elements.panelGridContainer.classList.add('mode-group');
+            }
+            if (elements.ackPanelCol) {
+                elements.ackPanelCol.style.display = 'none';
+            }
         }
 
-        const btnMap = {
-            'split': elements.viewSplitBtn,
-            'max-ack': elements.viewMaxAckBtn,
-            'max-cam': elements.viewMaxCamBtn
-        };
-
-        Object.keys(btnMap).forEach(k => {
-            const btn = btnMap[k];
-            if (!btn) return;
-            if (k === mode) {
-                btn.classList.remove('btn-secondary');
-                btn.classList.add('btn-primary');
-            } else {
-                btn.classList.remove('btn-primary');
-                btn.classList.add('btn-secondary');
-            }
-        });
-    }
-
-    function toggleMaximizePanel(target) {
-        if (state.viewMode === target) {
-            setViewMode('split');
-        } else {
-            setViewMode(target);
+        if (state.phase === 'receiver') {
+            startCamera();
         }
     }
 
@@ -1198,19 +1206,10 @@
     // =========================================================================
 
     function bindEvents() {
-        // Ingestion View Mode Buttons
-        if (elements.viewSplitBtn) elements.viewSplitBtn.addEventListener('click', () => setViewMode('split'));
-        if (elements.viewMaxAckBtn) elements.viewMaxAckBtn.addEventListener('click', () => setViewMode('max-ack'));
-        if (elements.viewMaxCamBtn) elements.viewMaxCamBtn.addEventListener('click', () => setViewMode('max-cam'));
-        if (elements.flipClientCamBtn) elements.flipClientCamBtn.addEventListener('click', flipCamera);
-
-        // Tap on panels directly to toggle focus
-        if (elements.ackPanelCol) {
-            elements.ackPanelCol.addEventListener('click', () => toggleMaximizePanel('max-ack'));
-        }
-        if (elements.camPanelCol) {
-            elements.camPanelCol.addEventListener('click', () => toggleMaximizePanel('max-cam'));
-        }
+        // Ingestion Transmission Mode Buttons
+        if (elements.clientMode1to1Btn) elements.clientMode1to1Btn.addEventListener('click', () => setClientTransmissionMode('1to1'));
+        if (elements.clientModeGroupBtn) elements.clientModeGroupBtn.addEventListener('click', () => setClientTransmissionMode('group'));
+        if (elements.floatingFlipCamBtn) elements.floatingFlipCamBtn.addEventListener('click', flipCamera);
 
         // Results Screen Buttons
         if (elements.startFindingBtn) elements.startFindingBtn.addEventListener('click', enterFindingMode);
@@ -1257,7 +1256,8 @@
         if (isDirectFinding) {
             await enterFindingMode();
         } else {
-            setViewMode('split');
+            const initialMode = (urlParams.get('mode') === 'group' || urlParams.get('mode') === 'multicast') ? 'group' : '1to1';
+            setClientTransmissionMode(initialMode);
             updateProgressUI();
             startCamera();
         }

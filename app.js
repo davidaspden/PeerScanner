@@ -50,6 +50,8 @@
         // Input Controls
         totesInput: document.getElementById('totesInput'),
         toteCountBadge: document.getElementById('toteCountBadge'),
+        testGeneratorBox: document.getElementById('testGeneratorBox'),
+        testRandomCountInput: document.getElementById('testRandomCountInput'),
         generateSampleBtn: document.getElementById('generateSampleBtn'),
         pasteClipboardBtn: document.getElementById('pasteClipboardBtn'),
         clearInputBtn: document.getElementById('clearInputBtn'),
@@ -235,12 +237,18 @@
     }
 
     /**
-     * Generate 100 sample Barcodes
+     * Generate custom count of sample Barcodes (configurable in test mode)
      */
-    function generate100SampleTotes() {
+    function generate100SampleTotes(forcedCount = null) {
+        let count = forcedCount || 100;
+        if (!forcedCount && elements.testRandomCountInput) {
+            const val = parseInt(elements.testRandomCountInput.value, 10);
+            if (!isNaN(val) && val > 0) count = val;
+        }
+
         const samples = [];
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-        for (let i = 1; i <= 100; i++) {
+        for (let i = 1; i <= count; i++) {
             let randStr = '';
             for (let k = 0; k < 6; k++) {
                 randStr += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -254,7 +262,15 @@
             saveInputToStorage();
             updateInputCount();
         }
-        showToast('Generated 100 sample barcodes!', 'info');
+        showToast(`Generated ${count} sample barcodes!`, 'info');
+    }
+
+    function checkTestMode() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const isTestMode = urlParams.get('test') === 'true' || urlParams.get('test') === '1' || window.location.hash.includes('test');
+        if (elements.testGeneratorBox) {
+            elements.testGeneratorBox.style.display = isTestMode ? 'inline-flex' : 'none';
+        }
     }
 
     // =========================================================================
@@ -952,6 +968,9 @@
     function init() {
         // Load saved barcodes from localStorage
         loadInputFromStorage();
+
+        // Check if ?test=true URL flag is active
+        checkTestMode();
 
         // On mobile/tablet screens, assume 1-to-1 functionality
         if (window.innerWidth <= 768) {
