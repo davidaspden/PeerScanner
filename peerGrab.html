@@ -160,24 +160,16 @@
                     </div>
                 </div>
 
-                <!-- Floating HUD Alert for Scanned Tote with Bold Last 4 Digits -->
+                <!-- Fixed Top HUD Alert for Scanned Tote with Bold Last 4 Digits (Overlayed on Camera) -->
                 <div id="findingHudOverlay" class="finding-hud-overlay" style="display: none;">
-                    <div class="hud-content-card">
-                        <span class="hud-check-badge">✅</span>
+                    <div class="hud-content-card" id="hudContentCard">
+                        <span class="hud-check-badge" id="hudCheckBadge">✅</span>
                         <div class="hud-details">
-                            <span class="hud-title">TOTE FOUND</span>
+                            <span class="hud-title" id="hudTitleText">TOTE FOUND</span>
                             <div class="hud-barcode-display" id="hudBarcodeDisplay">
                                 <span id="hudCodePrefix" class="hud-prefix">BC_060_G7</span><strong id="hudCodeLast4" class="hud-last4">XLVT</strong>
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Finding Mode Top Floating Info -->
-                <div class="finding-floating-top">
-                    <div class="finding-status-chip">
-                        <span class="pulse-dot"></span>
-                        <span id="findingStatusMessage">Scanning for Code 128...</span>
                     </div>
                 </div>
 

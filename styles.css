@@ -1493,15 +1493,17 @@ body.receiver-body {
     letter-spacing: 0.05em;
 }
 
-/* Floating HUD Alert with Bold Last 4 Digits */
+/* Fixed Top HUD Alert with Bold Last 4 Digits (Overlayed on Camera) */
 .finding-hud-overlay {
     position: absolute;
-    top: 24px;
+    top: 10px;
     left: 50%;
     transform: translateX(-50%);
+    width: 92%;
+    max-width: 440px;
     z-index: 1000;
     pointer-events: none;
-    transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .finding-hud-overlay.hud-visible {
@@ -1511,46 +1513,69 @@ body.receiver-body {
 
 .finding-hud-overlay.hud-fading {
     opacity: 0;
-    transform: translateX(-50%) translateY(-15px);
+    transform: translateX(-50%) translateY(-10px);
 }
 
 .hud-content-card {
-    background: rgba(15, 23, 42, 0.94);
+    background: rgba(11, 19, 38, 0.95);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border: 2px solid #10b981;
-    border-radius: var(--radius-lg);
-    padding: 12px 22px;
+    border-radius: var(--radius-md);
+    padding: 10px 18px;
     display: flex;
     align-items: center;
-    gap: 14px;
-    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.7), 0 0 30px rgba(16, 185, 129, 0.5);
+    gap: 12px;
+    width: 100%;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+    transition: var(--transition);
+}
+
+.hud-content-card.hud-new {
+    border: 2px solid #10b981;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 25px rgba(16, 185, 129, 0.5);
+}
+
+.hud-content-card.hud-new .hud-title {
+    color: #6ee7b7;
+}
+
+.hud-content-card.hud-already-found {
+    border: 2px solid #f59e0b;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 25px rgba(245, 158, 11, 0.4);
+}
+
+.hud-content-card.hud-already-found .hud-title {
+    color: #fcd34d;
 }
 
 .hud-check-badge {
-    font-size: 2rem;
+    font-size: 1.8rem;
     line-height: 1;
+    flex-shrink: 0;
 }
 
 .hud-details {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
+    overflow: hidden;
 }
 
 .hud-title {
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     font-weight: 800;
-    color: #6ee7b7;
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
 
 .hud-barcode-display {
     font-family: var(--font-mono);
-    font-size: 1.15rem;
+    font-size: 1.1rem;
     color: #ffffff;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .hud-prefix {
@@ -1558,48 +1583,11 @@ body.receiver-body {
 }
 
 .hud-last4 {
-    font-size: 1.45rem;
+    font-size: 1.38rem;
     font-weight: 900;
     color: #38bdf8;
     text-shadow: 0 0 12px rgba(56, 189, 248, 0.9);
     margin-left: 1px;
-}
-
-/* Finding Floating Top Chip */
-.finding-floating-top {
-    position: absolute;
-    top: 14px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 800;
-    pointer-events: none;
-}
-
-.finding-status-chip {
-    background: rgba(15, 23, 42, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(12px);
-    padding: 6px 14px;
-    border-radius: var(--radius-full);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.78rem;
-    color: var(--text-primary);
-}
-
-.pulse-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #ef4444;
-    box-shadow: 0 0 8px #ef4444;
-    animation: pulseRed 1.5s infinite;
-}
-
-@keyframes pulseRed {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.4; transform: scale(0.8); }
 }
 
 /* Finding Floating Bottom Controls */
