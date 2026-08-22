@@ -726,9 +726,34 @@
 
     async function enterFindingMode() {
         await stopCamera();
+
+        // 1. Save current ingested barcodes to localStorage
+        if (state.receivedMap.size > 0) {
+            const list = [];
+            for (let i = 0; i < state.totalCount; i++) {
+                if (state.receivedMap.has(i)) {
+                    list.push(state.receivedMap.get(i).tote);
+                }
+            }
+            if (list.length > 0) {
+                try {
+                    localStorage.setItem('peerScanner_barcodes', list.join('\n'));
+                } catch (e) {}
+            }
+        }
+
+        // 2. Fresh Page Reload Transition:
+        // Transitioning with a fresh URL (?mode=finding) guarantees the browser OS camera driver completely releases the front camera!
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('mode') !== 'finding') {
+            const currentBase = window.location.href.split('?')[0].split('#')[0];
+            window.location.replace(`${currentBase}?mode=finding`);
+            return;
+        }
+
         state.phase = 'finding';
 
-        // If entering finding mode directly without receiving QR stream first, auto-load from localStorage or samples
+        // Load barcodes from localStorage or samples
         if (state.receivedMap.size === 0) {
             try {
                 const saved = localStorage.getItem('peerScanner_barcodes');
@@ -744,7 +769,7 @@
             } catch (e) {}
 
             if (state.receivedMap.size === 0) {
-                // Generate 100 sample totes for instant testing
+                // Generate 100 sample barcodes for instant testing
                 state.totalCount = 100;
                 const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
                 for (let i = 0; i < 100; i++) {
@@ -758,7 +783,7 @@
             }
         }
 
-        // Hide receiving and results, show full page finding section
+        // Show full-page physical finding screen
         if (elements.receiverSection) elements.receiverSection.style.display = 'none';
         if (elements.resultsSection) elements.resultsSection.style.display = 'none';
         if (elements.fixedBottomBar) elements.fixedBottomBar.style.display = 'none';
@@ -810,13 +835,77 @@
         }
 
         state.isFindingScanning = false;
-        // Wait 250ms to allow mobile OS hardware camera driver to fully unbind and release lock
-        await new Promise(r => setTimeout(r, 250));
+        await new Promise(r => setTimeout(r, 200));
     }
 
-    async function startFindingCamera() {
+    async function startFindingCamera(retryCount = 0) {
         await stopFindingCamera();
 
+        // 1. Quagga2 Dedicated LiveStream Engine with Polling Retry
+        if (typeof Quagga !== 'undefined') {
+            try {
+                const targetEl = document.querySelector('#findingCameraViewport');
+                Quagga.init({
+                    inputStream: {
+                        name: "LiveStream",
+                        type: "LiveStream",
+                        target: targetEl,
+                        constraints: {
+                            facingMode: state.findingFacingMode,
+                            width: { min: 640, ideal: 1280, max: 1920 },
+                            height: { min: 480, ideal: 720, max: 1080 }
+                        },
+                        singleChannel: false
+                    },
+                    locator: {
+                        patchSize: "large",
+                        halfSample: true
+                    },
+                    numOfWorkers: (navigator.hardwareConcurrency ? Math.min(4, Math.max(1, navigator.hardwareConcurrency - 1)) : 2),
+                    frequency: 15,
+                    decoder: {
+                        readers: ["code_128_reader"],
+                        multiple: false
+                    },
+                    locate: true
+                }, function (err) {
+                    if (err) {
+                        console.warn(`[Quagga LiveStream Attempt ${retryCount + 1}] Hardware busy, polling retry...`, err);
+                        if (retryCount < 3) {
+                            setTimeout(() => startFindingCamera(retryCount + 1), 400);
+                        } else {
+                            console.warn('[Quagga LiveStream] Max retries reached, switching to direct video fallback');
+                            startFindingCameraFallback();
+                        }
+                        return;
+                    }
+
+                    console.log('[Quagga LiveStream] 🚀 Code 128 Engine Active on', state.findingFacingMode, 'lens!');
+                    Quagga.start();
+                    state.isFindingScanning = true;
+
+                    Quagga.offDetected();
+                    Quagga.onDetected((result) => {
+                        if (!state.isFindingScanning || state.phase !== 'finding') return;
+                        if (result && result.codeResult && result.codeResult.code) {
+                            processPhysicalBarcode(result.codeResult.code);
+                        }
+                    });
+                });
+                return;
+            } catch (eQ) {
+                if (retryCount < 3) {
+                    setTimeout(() => startFindingCamera(retryCount + 1), 400);
+                    return;
+                }
+            }
+        }
+
+        // 2. Direct Fallback Stream
+        await startFindingCameraFallback();
+    }
+
+    async function startFindingCameraFallback() {
         try {
             const stream = await getMediaStreamForFacingMode(state.findingFacingMode, true);
             state.findingCamStream = stream;
@@ -831,14 +920,22 @@
             state.isFindingScanning = true;
             await startFindingScanLoop();
         } catch (err) {
-            console.error('Finding camera error:', err);
+            console.error('Finding camera fallback error:', err);
             showToast('Camera error: ' + (err.message || err.name), 'error');
         }
     }
 
     async function toggleTorch() {
-        if (!state.findingCamStream) return;
-        const track = state.findingCamStream.getVideoTracks()[0];
+        let track = null;
+        if (typeof Quagga !== 'undefined' && Quagga.CameraAccess) {
+            try {
+                track = Quagga.CameraAccess.getActiveTrack();
+            } catch (e) {}
+        }
+        if (!track && state.findingCamStream) {
+            track = state.findingCamStream.getVideoTracks()[0];
+        }
+
         if (!track) return;
 
         try {
