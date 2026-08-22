@@ -867,6 +867,8 @@
                         const cropX = Math.floor((vWidth - size) / 2);
                         const cropY = Math.floor((vHeight - size) / 2);
                         const targetDim = Math.min(640, Math.floor(size));
+                        const cropW = targetDim;
+                        const cropH = targetDim;
 
                         canvas.width = targetDim;
                         canvas.height = targetDim;
@@ -880,7 +882,7 @@
                                     Quagga.decodeSingle({
                                         src: dataUrl,
                                         numOfWorkers: 0,
-                                        inputStream: { size: Math.max(cropW, cropH) },
+                                        inputStream: { size: targetDim },
                                         locator: { patchSize: "large", halfSample: true },
                                         decoder: {
                                             readers: ["code_128_reader"],
@@ -912,12 +914,12 @@
 
                         // 5. Vertical (90° Rotated) Pass for Barcodes on Tote Sides
                         if (!foundCode) {
-                            rotatedCanvas.width = cropH;
-                            rotatedCanvas.height = cropW;
+                            rotatedCanvas.width = targetDim;
+                            rotatedCanvas.height = targetDim;
                             rotCtx.save();
-                            rotCtx.translate(cropH / 2, cropW / 2);
+                            rotCtx.translate(targetDim / 2, targetDim / 2);
                             rotCtx.rotate(Math.PI / 2);
-                            rotCtx.drawImage(canvas, -cropW / 2, -cropH / 2);
+                            rotCtx.drawImage(canvas, -targetDim / 2, -targetDim / 2);
                             rotCtx.restore();
 
                             // Quagga2 Rotated Pass
@@ -928,7 +930,7 @@
                                         Quagga.decodeSingle({
                                             src: rotDataUrl,
                                             numOfWorkers: 0,
-                                            inputStream: { size: Math.max(cropW, cropH) },
+                                            inputStream: { size: targetDim },
                                             locator: { patchSize: "large", halfSample: true },
                                             decoder: {
                                                 readers: ["code_128_reader"],
