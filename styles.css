@@ -1562,10 +1562,10 @@ body.receiver-body {
     margin-left: 1px;
 }
 
-/* Finding Floating Bottom Controls (Lifted for Samsung/Android gesture & nav bars) */
+/* Finding Floating Bottom Controls (Generous 48px+ clearance for Samsung virtual buttons & gestures) */
 .finding-floating-controls {
     position: absolute;
-    bottom: max(38px, calc(env(safe-area-inset-bottom, 24px) + 24px));
+    bottom: max(48px, calc(env(safe-area-inset-bottom, 32px) + 32px));
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -1617,13 +1617,30 @@ body.receiver-body {
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
-    padding: 16px 16px max(24px, calc(env(safe-area-inset-bottom, 20px) + 12px));
+    padding: 16px 16px max(36px, calc(env(safe-area-inset-bottom, 24px) + 24px));
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.85);
     animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .drawer-header {
     flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.drawer-header-actions {
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.drawer-header-actions .btn {
+    width: 100%;
+    padding: 11px 16px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    border-radius: var(--radius-md);
 }
 
 .finding-checklist {
@@ -1635,27 +1652,7 @@ body.receiver-body {
     flex-direction: column;
     gap: 6px;
     padding-right: 4px;
-    margin: 8px 0;
-}
-
-.drawer-actions-row {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding-top: 10px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    margin-top: auto;
-    width: 100%;
-    box-sizing: border-box;
-}
-
-.drawer-actions-row .btn {
-    width: 100%;
-    padding: 13px 16px;
-    font-size: 0.92rem;
-    font-weight: 700;
-    border-radius: var(--radius-md);
+    margin-top: 8px;
 }
 
 /* Summary Card Footer & Toolbar */
