@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>PeerScanner - Optical Data Receiver</title>
     <link rel="icon" type="image/svg+xml" href="icon.svg">
     <link rel="stylesheet" href="styles.css">
     <script src="qrcode-lib.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
 </head>
 <body class="page-body receiver-body">
     <!-- Top Navigation Bar -->
@@ -17,9 +18,9 @@
             <span class="nav-title">PeerScanner</span>
         </a>
         <div class="nav-center-badge">
-            <div class="found-total-pill">
-                <span class="pill-label">Found:</span>
-                <span class="pill-value" id="navFoundCount">0</span> / <span id="navTotalCount">100</span>
+            <div class="found-total-pill" id="navProgressPill">
+                <span class="pill-label" id="navPillLabel">Received:</span>
+                <span class="pill-value" id="navPillCount">0</span> / <span id="navPillTotal">100</span>
             </div>
         </div>
         <div class="nav-links">
@@ -31,7 +32,7 @@
     <!-- Main Container -->
     <main class="page-container receiver-page-container">
         <!-- ================================================================
-             RECEIVER VIEW: INTERACTIVE CAMERA & ACK QR PANELS + GRID
+             SCREEN 1: RECEIVER VIEW (QR STREAM INGESTION & LIVE ACK)
              ================================================================ -->
         <section id="receiverSection" class="receiver-section-layout">
             
@@ -40,7 +41,7 @@
                 <button id="viewSplitBtn" class="btn btn-sm btn-primary" title="Show camera and ACK QR side by side">🔲 Split View</button>
                 <button id="viewMaxAckBtn" class="btn btn-sm btn-secondary" title="Maximize ACK QR for host webcam">⚡ Maximize ACK QR</button>
                 <button id="viewMaxCamBtn" class="btn btn-sm btn-secondary" title="Maximize Camera viewfinder">📷 Maximize Camera</button>
-                <button id="flipClientCamBtn" class="btn btn-sm btn-secondary" title="Switch between front and rear cameras">🔄 Flip Camera</button>
+                <button id="flipClientCamBtn" class="btn btn-sm btn-secondary" title="Switch between front and rear cameras">🔄 Flip</button>
             </div>
 
             <!-- STICKY TOP VIEW: CAMERA + LIVE ACK QR -->
@@ -61,7 +62,7 @@
                             </div>
                             <div id="camLoading" class="camera-loading-overlay">
                                 <div class="spinner"></div>
-                                <span id="camLoadingText">Starting front camera...</span>
+                                <span id="camLoadingText">Starting camera...</span>
                             </div>
                         </div>
                     </div>
@@ -88,7 +89,7 @@
                 <!-- Live Numerical Progress -->
                 <div class="progress-bar-container">
                     <div class="progress-stat-row">
-                        <span class="progress-title">Captured: <strong id="capturedCountText">0</strong> / <strong id="targetTotalText">100</strong></span>
+                        <span class="progress-title">Ingestion: <strong id="capturedCountText">0</strong> / <strong id="targetTotalText">100</strong></span>
                         <span class="progress-percentage" id="progressPercentText">0%</span>
                     </div>
                     <div class="progress-bar-track">
@@ -100,9 +101,9 @@
             <!-- SCROLLABLE PROGRESS GRID -->
             <div class="scrollable-content-panel card">
                 <div class="section-title-row">
-                    <h3>Progress Pattern</h3>
+                    <h3>Reconstruction Pattern</h3>
                     <span class="matrix-legend">
-                        <span class="legend-dot ack"></span> Captured
+                        <span class="legend-dot ack"></span> Ingested
                         <span class="legend-dot missing"></span> Missing
                     </span>
                 </div>
@@ -111,28 +112,92 @@
         </section>
 
         <!-- ================================================================
-             RESULTS SCREEN (WITH FULL COMPLETED ACK QR AT TOP)
+             SCREEN 2: RESULTS SCREEN (FULL ACK QR + START FINDING CTA)
              ================================================================ -->
         <section id="resultsSection" class="results-section" style="display: none;">
             <!-- Top: Full Completed ACK QR Code -->
             <div class="card final-ack-card">
                 <div class="section-title-row">
-                    <h2>Transfer Complete! 🎉</h2>
-                    <span class="results-total-badge" id="resultsTotalBadge">All Barcodes Captured</span>
+                    <h2>Broadcast Ingested! 🎉</h2>
+                    <span class="results-total-badge" id="resultsTotalBadge">100 Barcodes Received</span>
                 </div>
-                <p class="section-desc">Point this completed ACK QR at the host webcam to confirm full receipt.</p>
+                <p class="section-desc">Truth source complete! Point this ACK QR at host webcam or begin hunting physical totes.</p>
                 
                 <div class="final-ack-qr-container">
                     <canvas id="finalAckCanvas" width="220" height="220"></canvas>
+                </div>
+
+                <!-- Start Finding CTA Button -->
+                <div class="finding-cta-box">
+                    <button id="startFindingBtn" class="btn btn-primary btn-lg start-finding-btn">
+                        🎯 Start Finding Totes
+                    </button>
                 </div>
             </div>
 
             <!-- Collapsible Scanned List Container -->
             <div class="card results-list-card" id="resultsListCard" style="display: none;">
                 <div class="section-title-row">
-                    <h3>Captured Barcodes Details</h3>
+                    <h3>Received Barcodes List</h3>
                 </div>
                 <div class="scanned-list" id="resultsList"></div>
+            </div>
+        </section>
+
+        <!-- ================================================================
+             SCREEN 3: FULL-PAGE PHYSICAL FINDING MODE (CODE 128 SCANNER)
+             ================================================================ -->
+        <section id="findingSection" class="finding-section-layout" style="display: none;">
+            <!-- Full Viewport Camera Viewfinder -->
+            <div class="finding-camera-viewport" id="findingCameraViewport">
+                <video id="findingVideo" playsinline autoplay muted></video>
+                
+                <!-- 1D Linear Barcode Scanner Reticle -->
+                <div class="finding-reticle-overlay">
+                    <div class="finding-reticle-box">
+                        <div class="finding-scan-line"></div>
+                        <span class="finding-hint-text">Align Code 128 Barcode</span>
+                    </div>
+                </div>
+
+                <!-- Floating HUD Alert for Scanned Tote with Bold Last 4 Digits -->
+                <div id="findingHudOverlay" class="finding-hud-overlay" style="display: none;">
+                    <div class="hud-content-card">
+                        <span class="hud-check-badge">✅</span>
+                        <div class="hud-details">
+                            <span class="hud-title">TOTE FOUND</span>
+                            <div class="hud-barcode-display" id="hudBarcodeDisplay">
+                                <span id="hudCodePrefix" class="hud-prefix">BC_060_G7</span><strong id="hudCodeLast4" class="hud-last4">XLVT</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Finding Mode Top Floating Info -->
+                <div class="finding-floating-top">
+                    <div class="finding-status-chip">
+                        <span class="pulse-dot"></span>
+                        <span id="findingStatusMessage">Scanning for Code 128...</span>
+                    </div>
+                </div>
+
+                <!-- Finding Mode Floating Bottom Controls -->
+                <div class="finding-floating-controls">
+                    <button id="findingListToggleBtn" class="btn btn-secondary btn-sm">📋 View List</button>
+                    <button id="findingFlipCamBtn" class="btn btn-secondary btn-sm">🔄 Flip</button>
+                    <button id="findingExitBtn" class="btn btn-secondary btn-sm">🔙 Summary</button>
+                </div>
+            </div>
+
+            <!-- Finding Mode Slide-Up Drawer for Found/Pending Checklist -->
+            <div id="findingListDrawer" class="finding-drawer card" style="display: none;">
+                <div class="drawer-header">
+                    <div class="section-title-row">
+                        <h3>Totes Checklist (<span id="drawerFoundCount">0</span> / <span id="drawerTotalCount">100</span> Found)</h3>
+                        <button id="closeDrawerBtn" class="drawer-close-btn">&times;</button>
+                    </div>
+                </div>
+                <div class="scanned-list finding-checklist" id="findingChecklist"></div>
             </div>
         </section>
 
@@ -147,10 +212,15 @@
          ==================================================================== -->
     <footer class="fixed-bottom-bar" id="fixedBottomBar" style="display: none;">
         <div class="bottom-bar-inner">
-            <button id="copyAllBtn" class="btn btn-secondary btn-sm" title="Copy all barcodes to clipboard">📋 Copy All</button>
-            <button id="exportJsonBtn" class="btn btn-primary btn-sm" title="Export as JSON file">💾 Export JSON</button>
-            <button id="toggleListBtn" class="btn btn-secondary btn-sm" title="Show or hide the detailed list of barcodes">📜 Show List</button>
-            <button id="scanAgainBtn" class="btn btn-secondary btn-sm" title="Reset and scan a new batch">🔄 Reset</button>
+            <button id="copyAllBtn" class="btn btn-secondary btn-sm" title="Copy all barcodes to clipboard">📋 Copy</button>
+            <button id="exportJsonBtn" class="btn btn-secondary btn-sm" title="Export as JSON file">💾 Export</button>
+            <button id="toggleListBtn" class="btn btn-secondary btn-sm" title="Show or hide the detailed list of barcodes">📜 List</button>
+            
+            <!-- 5-Second Long Press Destructive Reset Button -->
+            <button id="scanAgainBtn" class="btn btn-secondary btn-sm long-press-reset-btn" title="Hold for 5 seconds to reset">
+                <span class="btn-label" id="resetBtnLabel">🔄 Reset (Hold 5s)</span>
+                <div class="long-press-progress-bar" id="resetProgressFill"></div>
+            </button>
         </div>
     </footer>
 
