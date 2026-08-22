@@ -686,13 +686,15 @@
     }
 
     async function stopFindingCamera() {
-        if (state.findingAnimFrameId) {
-            cancelAnimationFrame(state.findingAnimFrameId);
-            state.findingAnimFrameId = null;
-        }
         if (state.findingScanInterval) {
             clearInterval(state.findingScanInterval);
             state.findingScanInterval = null;
+        }
+
+        if (state.zxingReader && typeof state.zxingReader.reset === 'function') {
+            try {
+                state.zxingReader.reset();
+            } catch (e) {}
         }
 
         if (state.findingCamStream) {
@@ -786,12 +788,12 @@
     async function startFindingScanLoop() {
         let has1DBarcodeDetector = false;
 
-        // Check if BarcodeDetector natively supports 1D Code 128
+        // 1. Check if hardware BarcodeDetector natively supports 1D Code 128
         if ('BarcodeDetector' in window) {
             try {
                 if (typeof BarcodeDetector.getSupportedFormats === 'function') {
                     const formats = await BarcodeDetector.getSupportedFormats();
-                    if (formats && formats.includes('code_128')) {
+                    if (formats && (formats.includes('code_128') || formats.includes('code_39'))) {
                         state.findingBarcodeDetector = new BarcodeDetector({
                             formats: ['code_128', 'code_39', 'ean_13', 'upc_a']
                         });
@@ -803,13 +805,28 @@
             }
         }
 
-        if (!has1DBarcodeDetector) {
-            state.findingBarcodeDetector = null;
+        // 2. Continuous Hardware BarcodeDetector Loop (if supported on Android/iOS)
+        if (has1DBarcodeDetector && state.findingBarcodeDetector) {
+            state.findingScanInterval = setInterval(async () => {
+                if (!state.isFindingScanning || !elements.findingVideo || elements.findingVideo.readyState < 2) return;
+                try {
+                    const barcodes = await state.findingBarcodeDetector.detect(elements.findingVideo);
+                    if (barcodes && barcodes.length > 0) {
+                        for (const b of barcodes) {
+                            if (b.rawValue) processPhysicalBarcode(b.rawValue);
+                        }
+                    }
+                } catch (eDet) {}
+            }, 80);
         }
 
-        // Initialize ZXing MultiFormatReader for 1D barcodes
-        if (typeof ZXing !== 'undefined' && !state.zxingReader) {
+        // 3. ZXing Continuous Live Stream Decoder (Industry Standard for Desktop & Mobile Web)
+        if (typeof ZXing !== 'undefined' && elements.findingVideo) {
             try {
+                if (state.zxingReader && typeof state.zxingReader.reset === 'function') {
+                    state.zxingReader.reset();
+                }
+
                 const hints = new Map();
                 const formats = [
                     ZXing.BarcodeFormat.CODE_128,
@@ -819,161 +836,22 @@
                 ];
                 hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
                 hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-                state.zxingReader = new ZXing.BrowserMultiFormatReader(hints);
-            } catch (e) {
-                try { state.zxingReader = new ZXing.BrowserMultiFormatReader(); } catch (e2) {}
+
+                state.zxingReader = new ZXing.BrowserMultiFormatReader(hints, 80);
+
+                console.log('[Finder Scan] Starting ZXing decodeFromVideoElement on live video feed...');
+                
+                state.zxingReader.decodeFromVideoElement(elements.findingVideo, (result, err) => {
+                    if (result && result.getText()) {
+                        processPhysicalBarcode(result.getText());
+                    }
+                });
+            } catch (eZxing) {
+                console.error('[Finder Scan] ZXing continuous error:', eZxing);
             }
         }
 
-        console.log('[Finder Scan] Ready! Native 1D Detector:', has1DBarcodeDetector, 'Quagga2:', typeof Quagga !== 'undefined', 'ZXing Reader:', !!state.zxingReader);
-
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        const rotatedCanvas = document.createElement('canvas');
-        const rotCtx = rotatedCanvas.getContext('2d', { willReadFrequently: true });
-
-        let isBusy = false;
-
-        async function processFrame() {
-            if (!state.isFindingScanning || !elements.findingVideo || state.phase !== 'finding') return;
-
-            if (!isBusy && elements.findingVideo.readyState >= 2) {
-                isBusy = true;
-
-                try {
-                    const vWidth = elements.findingVideo.videoWidth || 640;
-                    const vHeight = elements.findingVideo.videoHeight || 480;
-
-                    let foundCode = null;
-
-                    // 1. Native Hardware BarcodeDetector (Zero-copy GPU)
-                    if (state.findingBarcodeDetector) {
-                        try {
-                            const barcodes = await state.findingBarcodeDetector.detect(elements.findingVideo);
-                            if (barcodes && barcodes.length > 0) {
-                                for (const b of barcodes) {
-                                    if (b.rawValue) {
-                                        foundCode = b.rawValue;
-                                        break;
-                                    }
-                                }
-                            }
-                        } catch (eDet) {}
-                    }
-
-                    // 2. Prepare high-contrast cropped square canvas (covers 94% of viewfinder, normalized to 640px)
-                    if (!foundCode) {
-                        const size = Math.min(vWidth, vHeight) * 0.94;
-                        const cropX = Math.floor((vWidth - size) / 2);
-                        const cropY = Math.floor((vHeight - size) / 2);
-                        const targetDim = Math.min(640, Math.floor(size));
-                        const cropW = targetDim;
-                        const cropH = targetDim;
-
-                        canvas.width = targetDim;
-                        canvas.height = targetDim;
-                        ctx.drawImage(elements.findingVideo, cropX, cropY, size, size, 0, 0, targetDim, targetDim);
-
-                        // 3. Quagga2 1D Barcode Engine (Locked strictly to Code 128 with checksum validation)
-                        if (typeof Quagga !== 'undefined') {
-                            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-                            foundCode = await new Promise((resolve) => {
-                                try {
-                                    Quagga.decodeSingle({
-                                        src: dataUrl,
-                                        numOfWorkers: 0,
-                                        inputStream: { size: targetDim },
-                                        locator: { patchSize: "large", halfSample: true },
-                                        decoder: {
-                                            readers: ["code_128_reader"],
-                                            multiple: false
-                                        },
-                                        locate: true
-                                    }, function(res) {
-                                        if (res && res.codeResult && res.codeResult.code) {
-                                            resolve(res.codeResult.code);
-                                        } else {
-                                            resolve(null);
-                                        }
-                                    });
-                                } catch(eQ) {
-                                    resolve(null);
-                                }
-                            });
-                        }
-
-                        // 4. ZXing Decoder Fallback (Pass A: Horizontal)
-                        if (!foundCode && state.zxingReader) {
-                            try {
-                                const result = state.zxingReader.decodeFromCanvas(canvas);
-                                if (result && result.getText()) {
-                                    foundCode = result.getText();
-                                }
-                            } catch (eH) {}
-                        }
-
-                        // 5. Vertical (90° Rotated) Pass for Barcodes on Tote Sides
-                        if (!foundCode) {
-                            rotatedCanvas.width = targetDim;
-                            rotatedCanvas.height = targetDim;
-                            rotCtx.save();
-                            rotCtx.translate(targetDim / 2, targetDim / 2);
-                            rotCtx.rotate(Math.PI / 2);
-                            rotCtx.drawImage(canvas, -targetDim / 2, -targetDim / 2);
-                            rotCtx.restore();
-
-                            // Quagga2 Rotated Pass
-                            if (typeof Quagga !== 'undefined') {
-                                const rotDataUrl = rotatedCanvas.toDataURL('image/jpeg', 0.85);
-                                foundCode = await new Promise((resolve) => {
-                                    try {
-                                        Quagga.decodeSingle({
-                                            src: rotDataUrl,
-                                            numOfWorkers: 0,
-                                            inputStream: { size: targetDim },
-                                            locator: { patchSize: "large", halfSample: true },
-                                            decoder: {
-                                                readers: ["code_128_reader"],
-                                                multiple: false
-                                            },
-                                            locate: true
-                                        }, function(res) {
-                                            if (res && res.codeResult && res.codeResult.code) {
-                                                resolve(res.codeResult.code);
-                                            } else {
-                                                resolve(null);
-                                            }
-                                        });
-                                    } catch(eQRot) {
-                                        resolve(null);
-                                    }
-                                });
-                            }
-
-                            // ZXing Rotated Pass
-                            if (!foundCode && state.zxingReader) {
-                                try {
-                                    const resultRot = state.zxingReader.decodeFromCanvas(rotatedCanvas);
-                                    if (resultRot && resultRot.getText()) {
-                                        foundCode = resultRot.getText();
-                                    }
-                                } catch (eV) {}
-                            }
-                        }
-                    }
-
-                    if (foundCode) {
-                        processPhysicalBarcode(foundCode);
-                    }
-                } finally {
-                    isBusy = false;
-                }
-            }
-
-            state.findingAnimFrameId = requestAnimationFrame(processFrame);
-        }
-
-        state.findingAnimFrameId = requestAnimationFrame(processFrame);
+        console.log('[Finder Scan] Ready! Hardware 1D Detector:', has1DBarcodeDetector, 'ZXing Continuous Reader:', !!state.zxingReader);
     }
 
     function processPhysicalBarcode(rawText) {
