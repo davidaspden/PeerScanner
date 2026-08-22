@@ -112,22 +112,22 @@
         </section>
 
         <!-- ================================================================
-             SCREEN 2: RESULTS SCREEN (FULL ACK QR + START FINDING CTA)
+             SCREEN 2: RESULTS / MANIFEST SUMMARY SCREEN
              ================================================================ -->
         <section id="resultsSection" class="results-section" style="display: none;">
             <!-- Top: Full Completed ACK QR Code -->
             <div class="card final-ack-card">
                 <div class="section-title-row">
-                    <h2>Broadcast Ingested! 🎉</h2>
-                    <span class="results-total-badge" id="resultsTotalBadge">100 Barcodes Received</span>
+                    <h2>Manifest Summary 🎉</h2>
+                    <span class="results-total-badge" id="resultsTotalBadge">0 Barcodes Received</span>
                 </div>
-                <p class="section-desc">Truth source complete! Point this ACK QR at host webcam or begin hunting physical totes.</p>
+                <p class="section-desc">Manifest truth source complete! Point this ACK QR at host broadcaster or resume finding physical totes.</p>
                 
                 <div class="final-ack-qr-container">
                     <canvas id="finalAckCanvas" width="220" height="220"></canvas>
                 </div>
 
-                <!-- Start Finding CTA Button -->
+                <!-- Primary Action Button -->
                 <div class="finding-cta-box">
                     <button id="startFindingBtn" class="btn btn-primary btn-lg start-finding-btn">
                         🎯 Start Finding Totes
@@ -135,12 +135,24 @@
                 </div>
             </div>
 
-            <!-- Collapsible Scanned List Container -->
-            <div class="card results-list-card" id="resultsListCard" style="display: none;">
+            <!-- Detailed Scanned List Container -->
+            <div class="card results-list-card" id="resultsListCard">
                 <div class="section-title-row">
-                    <h3>Received Barcodes List</h3>
+                    <h3>Manifest Checklist (<span id="summaryFoundCount">0</span> / <span id="summaryTotalCount">0</span> Found)</h3>
+                    <div class="results-actions-group">
+                        <button id="copyAllBtn" class="btn btn-secondary btn-sm" title="Copy all barcodes to clipboard">📋 Copy All</button>
+                        <button id="exportJsonBtn" class="btn btn-secondary btn-sm" title="Export as JSON file">💾 Export JSON</button>
+                    </div>
                 </div>
                 <div class="scanned-list" id="resultsList"></div>
+
+                <!-- Destructive Reset Session Button inside Summary Card -->
+                <div class="summary-card-footer">
+                    <button id="scanAgainBtn" class="btn btn-danger btn-sm long-press-reset-btn" title="Hold for 5 seconds to reset">
+                        <span class="btn-label" id="resetBtnLabel">🗑️ Reset Session (Hold 5s)</span>
+                        <div class="long-press-progress-bar" id="resetProgressFill"></div>
+                    </button>
+                </div>
             </div>
         </section>
 
@@ -205,23 +217,6 @@
             <p>Created by <a href="https://davidaspden.github.io" target="_blank" rel="noopener noreferrer">David Aspden</a></p>
         </footer>
     </main>
-
-    <!-- ====================================================================
-         FIXED BOTTOM ACTION BAR (RESULTS / ACTIVE CONTROLS)
-         ==================================================================== -->
-    <footer class="fixed-bottom-bar" id="fixedBottomBar" style="display: none;">
-        <div class="bottom-bar-inner">
-            <button id="copyAllBtn" class="btn btn-secondary btn-sm" title="Copy all barcodes to clipboard">📋 Copy</button>
-            <button id="exportJsonBtn" class="btn btn-secondary btn-sm" title="Export as JSON file">💾 Export</button>
-            <button id="toggleListBtn" class="btn btn-secondary btn-sm" title="Show or hide the detailed list of barcodes">📜 List</button>
-            
-            <!-- 5-Second Long Press Destructive Reset Button -->
-            <button id="scanAgainBtn" class="btn btn-secondary btn-sm long-press-reset-btn" title="Hold for 5 seconds to reset">
-                <span class="btn-label" id="resetBtnLabel">🔄 Reset (Hold 5s)</span>
-                <div class="long-press-progress-bar" id="resetProgressFill"></div>
-            </button>
-        </div>
-    </footer>
 
     <script src="peerGrab.js"></script>
 </body>

@@ -86,12 +86,19 @@
         ackCanvas: document.getElementById('ackCanvas'),
         ackCountBadge: document.getElementById('ackCountBadge'),
         
-        // Results Screen
+        // Summary Screen
         finalAckCanvas: document.getElementById('finalAckCanvas'),
         resultsTotalBadge: document.getElementById('resultsTotalBadge'),
         startFindingBtn: document.getElementById('startFindingBtn'),
         resultsListCard: document.getElementById('resultsListCard'),
         resultsList: document.getElementById('resultsList'),
+        summaryFoundCount: document.getElementById('summaryFoundCount'),
+        summaryTotalCount: document.getElementById('summaryTotalCount'),
+        exportJsonBtn: document.getElementById('exportJsonBtn'),
+        copyAllBtn: document.getElementById('copyAllBtn'),
+        scanAgainBtn: document.getElementById('scanAgainBtn'),
+        resetBtnLabel: document.getElementById('resetBtnLabel'),
+        resetProgressFill: document.getElementById('resetProgressFill'),
         
         // Finding Mode Elements
         findingCameraViewport: document.getElementById('findingCameraViewport'),
@@ -114,16 +121,7 @@
         drawerExitSummaryBtn: document.getElementById('drawerExitSummaryBtn'),
         drawerClearAllBtn: document.getElementById('drawerClearAllBtn'),
         drawerResetBtnLabel: document.getElementById('drawerResetBtnLabel'),
-        drawerResetProgressFill: document.getElementById('drawerResetProgressFill'),
-        
-        // Fixed Bottom Bar
-        fixedBottomBar: document.getElementById('fixedBottomBar'),
-        exportJsonBtn: document.getElementById('exportJsonBtn'),
-        copyAllBtn: document.getElementById('copyAllBtn'),
-        toggleListBtn: document.getElementById('toggleListBtn'),
-        scanAgainBtn: document.getElementById('scanAgainBtn'),
-        resetBtnLabel: document.getElementById('resetBtnLabel'),
-        resetProgressFill: document.getElementById('resetProgressFill')
+        drawerResetProgressFill: document.getElementById('drawerResetProgressFill')
     };
 
     // =========================================================================
@@ -674,12 +672,31 @@
     function renderResultsList() {
         if (!elements.resultsList) return;
 
+        const count = state.foundMap.size;
+        const total = state.totalCount;
+
+        if (elements.summaryFoundCount) elements.summaryFoundCount.textContent = count;
+        if (elements.summaryTotalCount) elements.summaryTotalCount.textContent = total;
+        if (elements.resultsTotalBadge) {
+            elements.resultsTotalBadge.textContent = `${total} Barcodes (${count} Found)`;
+        }
+
+        if (total === 0) {
+            elements.resultsList.innerHTML = `
+                <div style="padding: 24px 12px; text-align: center; color: var(--text-muted); font-size: 0.85rem; font-style: italic;">
+                    No barcodes currently loaded in manifest.
+                </div>
+            `;
+            return;
+        }
+
         const items = [];
         for (let i = 0; i < state.totalCount; i++) {
             const item = state.receivedMap.get(i);
             const tote = item ? item.tote : `BC_${i + 1}`;
             const isFound = state.foundMap.has(i);
-            const time = item ? new Date(item.timestamp).toLocaleTimeString() : '';
+            const foundData = state.foundMap.get(i);
+            const time = foundData ? new Date(foundData.foundAt).toLocaleTimeString() : (item ? new Date(item.timestamp).toLocaleTimeString() : '');
             
             items.push(`
                 <div class="scanned-item ${isFound ? 'is-found' : ''}" id="resultItem_${i}">
@@ -690,7 +707,7 @@
                         </span>
                         <div class="scanned-item-meta">
                             <span class="scanned-item-badge peer">#${i + 1}</span>
-                            <span>${isFound ? 'Found' : 'Ingested ' + escapeHtml(time)}</span>
+                            <span>${isFound ? 'Found at ' + escapeHtml(time) : 'Missing (Ingested ' + escapeHtml(time) + ')'}</span>
                         </div>
                     </div>
                     <div class="scanned-item-actions">
@@ -712,16 +729,6 @@
                 }
             });
         });
-    }
-
-    function toggleListVisibility() {
-        state.isListVisible = !state.isListVisible;
-        if (elements.resultsListCard) {
-            elements.resultsListCard.style.display = state.isListVisible ? 'block' : 'none';
-        }
-        if (elements.toggleListBtn) {
-            elements.toggleListBtn.textContent = state.isListVisible ? '🙈 Hide List' : '📜 Show List';
-        }
     }
 
     // =========================================================================
@@ -808,8 +815,9 @@
         state.phase = 'results';
 
         if (elements.findingSection) elements.findingSection.style.display = 'none';
+        if (elements.findingListDrawer) elements.findingListDrawer.style.display = 'none';
+        if (elements.receiverSection) elements.receiverSection.style.display = 'none';
         if (elements.resultsSection) elements.resultsSection.style.display = 'block';
-        if (elements.fixedBottomBar) elements.fixedBottomBar.style.display = 'block';
 
         renderResultsList();
         updateProgressUI();
@@ -1487,14 +1495,13 @@
         if (elements.clientModeGroupBtn) elements.clientModeGroupBtn.addEventListener('click', () => setClientTransmissionMode('group'));
         if (elements.floatingFlipCamBtn) elements.floatingFlipCamBtn.addEventListener('click', flipCamera);
 
-        // Results Screen Buttons
+        // Summary Screen Buttons
         if (elements.startFindingBtn) elements.startFindingBtn.addEventListener('click', enterFindingMode);
         if (elements.exportJsonBtn) elements.exportJsonBtn.addEventListener('click', exportJSON);
         if (elements.copyAllBtn) elements.copyAllBtn.addEventListener('click', copyAllToClipboard);
-        if (elements.toggleListBtn) elements.toggleListBtn.addEventListener('click', toggleListVisibility);
 
-        // 5-Second Long Press Reset Handlers (Results Footer & Finding Drawer)
-        setupLongPressReset(elements.scanAgainBtn, elements.resetBtnLabel, elements.resetProgressFill, '🔄 Reset (Hold 5s)');
+        // 5-Second Long Press Reset Handlers (Summary Screen & Finding Drawer)
+        setupLongPressReset(elements.scanAgainBtn, elements.resetBtnLabel, elements.resetProgressFill, '🗑️ Reset Session (Hold 5s)');
         setupLongPressReset(elements.drawerClearAllBtn, elements.drawerResetBtnLabel, elements.drawerResetProgressFill, '🗑️ Clear All (Hold 5s)');
 
         // Finding Mode Controls
@@ -1511,8 +1518,8 @@
             elements.navProgressPill.addEventListener('click', () => {
                 if (state.phase === 'finding') {
                     toggleFindingListDrawer();
-                } else if (state.phase === 'results') {
-                    toggleListVisibility();
+                } else if (state.phase === 'receiving') {
+                    if (elements.clientGrid) elements.clientGrid.scrollIntoView({ behavior: 'smooth' });
                 }
             });
         }

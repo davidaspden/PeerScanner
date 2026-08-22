@@ -1411,6 +1411,7 @@ body.receiver-body {
     top: 50px;
     left: 0;
     width: 100vw;
+    height: calc(100dvh - 50px);
     height: calc(100vh - 50px);
     z-index: 900;
     background: #000000;
@@ -1453,13 +1454,13 @@ body.receiver-body {
 }
 
 .finding-reticle-box {
-    position: relative;
-    width: 92%;
+    width: 82%;
     max-width: 440px;
-    height: 380px; /* Wide, expansive full-viewport targeting zone */
-    border: 2px solid rgba(56, 189, 248, 0.8);
-    border-radius: var(--radius-lg);
-    box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.4), 0 0 28px rgba(56, 189, 248, 0.35);
+    height: 140px;
+    border: 2px solid rgba(56, 189, 248, 0.9);
+    border-radius: var(--radius-md);
+    position: relative;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45), 0 0 20px rgba(56, 189, 248, 0.3);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1467,126 +1468,90 @@ body.receiver-body {
 
 .finding-scan-line {
     position: absolute;
-    left: 5%;
-    right: 5%;
-    height: 2.5px;
-    background: linear-gradient(90deg, transparent, #ef4444, #f87171, #ef4444, transparent);
-    box-shadow: 0 0 10px #ef4444;
-    animation: scan1D 2s ease-in-out infinite;
+    width: 100%;
+    height: 2px;
+    background: #ef4444;
+    box-shadow: 0 0 8px #ef4444;
+    animation: scanPulse 1.8s ease-in-out infinite alternate;
 }
 
-@keyframes scan1D {
-    0%, 100% { top: 20%; opacity: 0.8; }
-    50% { top: 80%; opacity: 1; }
+@keyframes scanPulse {
+    0% { top: 10%; opacity: 0.7; }
+    100% { top: 90%; opacity: 1; }
 }
 
 .finding-hint-text {
     position: absolute;
     bottom: -28px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: #e0f2fe;
-    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+    letter-spacing: 0.5px;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9);
 }
 
-/* Fixed Top HUD Alert with Bold Last 4 Digits (Overlayed on Camera) */
+/* Fixed Top HUD Alert for Scanned Tote with Bold Last 4 Digits */
 .finding-hud-overlay {
     position: absolute;
-    top: 10px;
+    top: 16px;
     left: 50%;
     transform: translateX(-50%);
-    width: 92%;
-    max-width: 440px;
-    z-index: 1000;
+    width: 90%;
+    max-width: 420px;
+    z-index: 800;
     pointer-events: none;
-    transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: hudSlideDown 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.finding-hud-overlay.hud-visible {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-}
-
-.finding-hud-overlay.hud-fading {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-10px);
+@keyframes hudSlideDown {
+    from { transform: translate(-50%, -30px); opacity: 0; }
+    to { transform: translate(-50%, 0); opacity: 1; }
 }
 
 .hud-content-card {
-    background: rgba(11, 19, 38, 0.95);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-radius: var(--radius-md);
-    padding: 10px 18px;
     display: flex;
     align-items: center;
-    gap: 12px;
-    width: 100%;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
-    transition: var(--transition);
-}
-
-.hud-content-card.hud-new {
-    border: 2px solid #10b981;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 25px rgba(16, 185, 129, 0.5);
-}
-
-.hud-content-card.hud-new .hud-title {
-    color: #6ee7b7;
-}
-
-.hud-content-card.hud-already-found {
-    border: 2px solid #f59e0b;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 25px rgba(245, 158, 11, 0.4);
-}
-
-.hud-content-card.hud-already-found .hud-title {
-    color: #fcd34d;
-}
-
-.hud-content-card.hud-unlisted {
-    border: 2px solid #818cf8;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 25px rgba(129, 140, 248, 0.4);
-}
-
-.hud-content-card.hud-unlisted .hud-title {
-    color: #c7d2fe;
+    gap: 14px;
+    padding: 12px 18px;
+    background: rgba(11, 15, 25, 0.94);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1.5px solid #10b981;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 20px rgba(16, 185, 129, 0.35);
 }
 
 .hud-check-badge {
     font-size: 1.8rem;
     line-height: 1;
-    flex-shrink: 0;
 }
 
 .hud-details {
     display: flex;
     flex-direction: column;
-    gap: 1px;
-    overflow: hidden;
+    gap: 2px;
 }
 
 .hud-title {
     font-size: 0.72rem;
     font-weight: 800;
-    letter-spacing: 0.08em;
+    color: #10b981;
+    letter-spacing: 1px;
     text-transform: uppercase;
 }
 
 .hud-barcode-display {
     font-family: var(--font-mono);
-    font-size: 1.1rem;
+    font-size: 1.15rem;
     color: #ffffff;
-    letter-spacing: 0.03em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    display: flex;
+    align-items: baseline;
 }
 
 .hud-prefix {
-    opacity: 0.85;
+    opacity: 0.75;
+    font-weight: 500;
 }
 
 .hud-last4 {
@@ -1597,32 +1562,37 @@ body.receiver-body {
     margin-left: 1px;
 }
 
-/* Finding Floating Bottom Controls */
+/* Finding Floating Bottom Controls (Lifted for Samsung/Android gesture & nav bars) */
 .finding-floating-controls {
     position: absolute;
-    bottom: 24px;
+    bottom: max(38px, calc(env(safe-area-inset-bottom, 24px) + 24px));
     left: 50%;
     transform: translateX(-50%);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 850;
-    width: 90%;
+    width: 88%;
     max-width: 320px;
+    pointer-events: auto;
 }
 
 .finding-show-list-btn {
     width: 100%;
-    padding: 12px 24px;
-    font-size: 0.95rem;
+    padding: 14px 24px;
+    font-size: 1rem;
     font-weight: 700;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-lg);
     letter-spacing: 0.5px;
-    background: rgba(14, 165, 233, 0.9) !important;
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.25) !important;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(14, 165, 233, 0.4) !important;
+    background: rgba(14, 165, 233, 0.95) !important;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1.5px solid rgba(255, 255, 255, 0.3) !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 20px rgba(14, 165, 233, 0.45) !important;
     cursor: pointer;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
     transition: var(--transition);
 }
 
@@ -1636,7 +1606,8 @@ body.receiver-body {
     bottom: 0;
     left: 0;
     width: 100%;
-    max-height: 80vh;
+    max-height: 85dvh;
+    max-height: 85vh;
     z-index: 950;
     background: rgba(11, 15, 25, 0.98);
     backdrop-filter: blur(20px);
@@ -1646,13 +1617,13 @@ body.receiver-body {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 16px;
+    padding: 16px 16px max(24px, env(safe-area-inset-bottom, 24px));
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.8);
     animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .finding-checklist {
-    max-height: 52vh;
+    max-height: 55vh;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     display: flex;
@@ -1672,9 +1643,35 @@ body.receiver-body {
 
 .drawer-actions-row .btn {
     flex: 1;
-    padding: 10px 8px;
-    font-size: 0.82rem;
+    padding: 11px 8px;
+    font-size: 0.85rem;
     font-weight: 600;
+}
+
+/* Summary Card Footer & Toolbar */
+.results-actions-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.results-actions-group .btn {
+    font-size: 0.78rem;
+    padding: 6px 10px;
+}
+
+.summary-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin-top: 8px;
+}
+
+.summary-card-footer .btn {
+    padding: 9px 16px;
+    font-size: 0.82rem;
 }
 
 @keyframes slideUp {
@@ -1691,40 +1688,6 @@ body.receiver-body {
     cursor: pointer;
 }
 
-/* ==========================================================================
-   FIXED BOTTOM ACTION BAR (Receiver page)
-   ========================================================================== */
-.fixed-bottom-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    z-index: 1000;
-    background: rgba(11, 15, 25, 0.96);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border-top: 1px solid var(--bg-card-border);
-    padding: 8px 10px;
-}
-
-.bottom-bar-inner {
-    width: 100%;
-    max-width: 600px;
-    margin: 0 auto;
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1.35fr;
-    gap: 6px;
-    align-items: center;
-}
-
-.bottom-bar-inner .btn {
-    width: 100%;
-    font-size: 0.78rem;
-    padding: 8px 4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
 
 /* 5-Second Long Press Reset Button */
 .long-press-reset-btn {
