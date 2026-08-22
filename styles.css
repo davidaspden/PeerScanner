@@ -1602,50 +1602,60 @@ body.receiver-body {
 
 /* Finding Checklist Drawer */
 .finding-drawer {
-    position: absolute;
+    position: fixed;
     bottom: 0;
     left: 0;
     width: 100%;
-    max-height: 85dvh;
-    max-height: 85vh;
-    z-index: 950;
+    max-height: 80dvh;
+    max-height: 80vh;
+    z-index: 1200;
     background: rgba(11, 15, 25, 0.98);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     border-top: 1.5px solid var(--bg-card-border);
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 16px 16px max(24px, env(safe-area-inset-bottom, 24px));
-    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.8);
+    box-sizing: border-box;
+    padding: 16px 16px max(24px, calc(env(safe-area-inset-bottom, 20px) + 12px));
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.85);
     animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+.drawer-header {
+    flex-shrink: 0;
+}
+
 .finding-checklist {
-    max-height: 55vh;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     display: flex;
     flex-direction: column;
     gap: 6px;
     padding-right: 4px;
+    margin: 8px 0;
 }
 
 .drawer-actions-row {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     gap: 8px;
     padding-top: 10px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
     margin-top: auto;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .drawer-actions-row .btn {
-    flex: 1;
-    padding: 11px 8px;
-    font-size: 0.85rem;
-    font-weight: 600;
+    width: 100%;
+    padding: 13px 16px;
+    font-size: 0.92rem;
+    font-weight: 700;
+    border-radius: var(--radius-md);
 }
 
 /* Summary Card Footer & Toolbar */

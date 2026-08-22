@@ -112,13 +112,11 @@
         findingListToggleBtn: document.getElementById('findingListToggleBtn'),
         findingTorchBtn: document.getElementById('findingTorchBtn'),
         findingFlipCamBtn: document.getElementById('findingFlipCamBtn'),
-        findingExitBtn: document.getElementById('findingExitBtn'),
         findingListDrawer: document.getElementById('findingListDrawer'),
         findingChecklist: document.getElementById('findingChecklist'),
         closeDrawerBtn: document.getElementById('closeDrawerBtn'),
         drawerFoundCount: document.getElementById('drawerFoundCount'),
         drawerTotalCount: document.getElementById('drawerTotalCount'),
-        drawerExitSummaryBtn: document.getElementById('drawerExitSummaryBtn'),
         drawerClearAllBtn: document.getElementById('drawerClearAllBtn'),
         drawerResetBtnLabel: document.getElementById('drawerResetBtnLabel'),
         drawerResetProgressFill: document.getElementById('drawerResetProgressFill')
@@ -810,18 +808,7 @@
         await startFindingCamera();
     }
 
-    async function exitFindingMode() {
-        await stopFindingCamera();
-        state.phase = 'results';
 
-        if (elements.findingSection) elements.findingSection.style.display = 'none';
-        if (elements.findingListDrawer) elements.findingListDrawer.style.display = 'none';
-        if (elements.receiverSection) elements.receiverSection.style.display = 'none';
-        if (elements.resultsSection) elements.resultsSection.style.display = 'block';
-
-        renderResultsList();
-        updateProgressUI();
-    }
 
     async function stopFindingCamera() {
         if (state.findingScanInterval) {
@@ -1508,8 +1495,6 @@
         if (elements.findingListToggleBtn) elements.findingListToggleBtn.addEventListener('click', toggleFindingListDrawer);
         if (elements.findingTorchBtn) elements.findingTorchBtn.addEventListener('click', toggleTorch);
         if (elements.findingFlipCamBtn) elements.findingFlipCamBtn.addEventListener('click', flipFindingCamera);
-        if (elements.findingExitBtn) elements.findingExitBtn.addEventListener('click', exitFindingMode);
-        if (elements.drawerExitSummaryBtn) elements.drawerExitSummaryBtn.addEventListener('click', exitFindingMode);
         if (elements.closeDrawerBtn) elements.closeDrawerBtn.addEventListener('click', toggleFindingListDrawer);
 
         // Top Navigation Pill Click (Instant Drawer Access)
