@@ -185,10 +185,11 @@
             color: #2563eb;
         }
 
-        .barcode-svg {
+        .barcode-canvas {
             width: 100%;
             height: 100%;
             display: block;
+            object-fit: contain;
         }
 
         .tag-index-badge {
@@ -304,23 +305,23 @@
                     indexBadge.textContent = `#${idx + 1}`;
                     card.appendChild(indexBadge);
 
-                    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-                    svg.setAttribute('class', 'barcode-svg');
-                    card.appendChild(svg);
+                    const canvas = document.createElement('canvas');
+                    canvas.className = 'barcode-canvas';
+                    card.appendChild(canvas);
 
                     elements.container.appendChild(card);
 
-                    // Render Code 128 via JsBarcode
+                    // Render Code 128 via JsBarcode onto canvas
                     try {
-                        JsBarcode(svg, code, {
+                        JsBarcode(canvas, code, {
                             format: 'CODE128',
-                            width: 1.4,
+                            width: 1.5,
                             height: 48,
                             displayValue: true,
                             font: 'monospace',
-                            fontSize: 11,
+                            fontSize: 12,
                             textMargin: 2,
-                            margin: 2,
+                            margin: 4,
                             background: '#ffffff',
                             lineColor: '#000000'
                         });
