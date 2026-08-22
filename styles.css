@@ -1548,6 +1548,15 @@ body.receiver-body {
     color: #fcd34d;
 }
 
+.hud-content-card.hud-unlisted {
+    border: 2px solid #818cf8;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 25px rgba(129, 140, 248, 0.4);
+}
+
+.hud-content-card.hud-unlisted .hud-title {
+    color: #c7d2fe;
+}
+
 .hud-check-badge {
     font-size: 1.8rem;
     line-height: 1;

@@ -632,6 +632,36 @@
     async function enterFindingMode() {
         state.phase = 'finding';
 
+        // If entering finding mode directly without receiving QR stream first, auto-load from localStorage or samples
+        if (state.receivedMap.size === 0) {
+            try {
+                const saved = localStorage.getItem('peerScanner_barcodes');
+                if (saved && saved.trim().length > 0) {
+                    const list = saved.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+                    state.totalCount = list.length;
+                    list.forEach((tote, i) => {
+                        state.receivedMap.set(i, { index: i, tote: tote });
+                        state.toteLookup.set(tote, i);
+                        state.toteLookup.set(tote.toUpperCase(), i);
+                    });
+                }
+            } catch (e) {}
+
+            if (state.receivedMap.size === 0) {
+                // Generate 100 sample totes for instant testing
+                state.totalCount = 100;
+                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+                for (let i = 0; i < 100; i++) {
+                    let randStr = '';
+                    for (let k = 0; k < 6; k++) randStr += chars.charAt(Math.floor(Math.random() * chars.length));
+                    const tote = `BC_${String(i + 1).padStart(3, '0')}_${randStr}`;
+                    state.receivedMap.set(i, { index: i, tote: tote });
+                    state.toteLookup.set(tote, i);
+                    state.toteLookup.set(tote.toUpperCase(), i);
+                }
+            }
+        }
+
         // Hide receiving and results, show full page finding section
         if (elements.receiverSection) elements.receiverSection.style.display = 'none';
         if (elements.resultsSection) elements.resultsSection.style.display = 'none';
@@ -713,7 +743,7 @@
             }
 
             state.isFindingScanning = true;
-            startFindingScanLoop();
+            await startFindingScanLoop();
         } catch (err) {
             console.error('Finding camera error:', err);
             showToast('Finding camera error: ' + (err.message || err.name), 'error');
@@ -753,32 +783,49 @@
         startFindingCamera();
     }
 
-    function startFindingScanLoop() {
-        // Initialize BarcodeDetector for Code 128 (hardware accelerated)
-        if ('BarcodeDetector' in window && !state.findingBarcodeDetector) {
+    async function startFindingScanLoop() {
+        let has1DBarcodeDetector = false;
+
+        // Check if BarcodeDetector natively supports 1D Code 128
+        if ('BarcodeDetector' in window) {
             try {
-                state.findingBarcodeDetector = new BarcodeDetector({
-                    formats: ['code_128', 'code_39', 'ean_13', 'upc_a']
-                });
+                if (typeof BarcodeDetector.getSupportedFormats === 'function') {
+                    const formats = await BarcodeDetector.getSupportedFormats();
+                    if (formats && formats.includes('code_128')) {
+                        state.findingBarcodeDetector = new BarcodeDetector({
+                            formats: ['code_128', 'code_39', 'ean_13', 'upc_a']
+                        });
+                        has1DBarcodeDetector = true;
+                    }
+                }
             } catch (e) {
-                try {
-                    state.findingBarcodeDetector = new BarcodeDetector();
-                } catch (e2) {}
+                console.warn('BarcodeDetector 1D check:', e);
             }
         }
 
-        // Initialize ZXing MultiFormatReader fallback
+        if (!has1DBarcodeDetector) {
+            state.findingBarcodeDetector = null;
+        }
+
+        // Initialize ZXing MultiFormatReader for 1D barcodes
         if (typeof ZXing !== 'undefined' && !state.zxingReader) {
             try {
                 const hints = new Map();
-                if (ZXing.BarcodeFormat && ZXing.BarcodeFormat.CODE_128) {
-                    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39]);
-                }
+                const formats = [
+                    ZXing.BarcodeFormat.CODE_128,
+                    ZXing.BarcodeFormat.CODE_39,
+                    ZXing.BarcodeFormat.EAN_13,
+                    ZXing.BarcodeFormat.UPC_A
+                ];
+                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+                hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
                 state.zxingReader = new ZXing.BrowserMultiFormatReader(hints);
             } catch (e) {
                 try { state.zxingReader = new ZXing.BrowserMultiFormatReader(); } catch (e2) {}
             }
         }
+
+        console.log('[Finder Scan] Ready! Native 1D Detector:', has1DBarcodeDetector, 'ZXing Reader:', !!state.zxingReader);
 
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -797,19 +844,26 @@
                     const vWidth = elements.findingVideo.videoWidth || 640;
                     const vHeight = elements.findingVideo.videoHeight || 480;
 
-                    // 1. Native Hardware BarcodeDetector (Zero-copy GPU direct from video stream, 3-6ms)
+                    let foundCode = null;
+
+                    // 1. Native Hardware BarcodeDetector (if supported)
                     if (state.findingBarcodeDetector) {
                         try {
                             const barcodes = await state.findingBarcodeDetector.detect(elements.findingVideo);
                             if (barcodes && barcodes.length > 0) {
                                 for (const b of barcodes) {
-                                    if (b.rawValue) processPhysicalBarcode(b.rawValue);
+                                    if (b.rawValue) {
+                                        foundCode = b.rawValue;
+                                        break;
+                                    }
                                 }
                             }
                         } catch (eDet) {}
-                    } else if (state.zxingReader) {
-                        // 2. JavaScript Fallback (Cropped to large square reticle with 0° & 90° rotation)
-                        const size = Math.min(vWidth, vHeight) * 0.85;
+                    }
+
+                    // 2. ZXing Decoder on Square Canvas (Horizontal & Vertical 90°)
+                    if (!foundCode && state.zxingReader) {
+                        const size = Math.min(vWidth, vHeight) * 0.88;
                         const cropX = Math.floor((vWidth - size) / 2);
                         const cropY = Math.floor((vHeight - size) / 2);
                         const cropW = Math.floor(size);
@@ -819,21 +873,16 @@
                         canvas.height = cropH;
                         ctx.drawImage(elements.findingVideo, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
-                        const img = ctx.getImageData(0, 0, cropW, cropH);
-                        const lumSource = new ZXing.RGBLuminanceSource(img.data, cropW, cropH);
-                        const binBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lumSource));
-                        
-                        let decoded = false;
+                        // Pass A: Horizontal
                         try {
-                            const result = state.zxingReader.decodeBitmap(binBitmap);
+                            const result = state.zxingReader.decodeFromCanvas(canvas);
                             if (result && result.getText()) {
-                                processPhysicalBarcode(result.getText());
-                                decoded = true;
+                                foundCode = result.getText();
                             }
                         } catch (eH) {}
 
-                        // If horizontal failed, check 90° rotated vertical in fallback
-                        if (!decoded) {
+                        // Pass B: 90° Rotated for vertical barcodes
+                        if (!foundCode) {
                             rotatedCanvas.width = cropH;
                             rotatedCanvas.height = cropW;
                             rotCtx.save();
@@ -842,16 +891,17 @@
                             rotCtx.drawImage(canvas, -cropW / 2, -cropH / 2);
                             rotCtx.restore();
 
-                            const imgRot = rotCtx.getImageData(0, 0, cropH, cropW);
-                            const lumRot = new ZXing.RGBLuminanceSource(imgRot.data, cropH, cropW);
-                            const binRot = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lumRot));
                             try {
-                                const resultRot = state.zxingReader.decodeBitmap(binRot);
+                                const resultRot = state.zxingReader.decodeFromCanvas(rotatedCanvas);
                                 if (resultRot && resultRot.getText()) {
-                                    processPhysicalBarcode(resultRot.getText());
+                                    foundCode = resultRot.getText();
                                 }
                             } catch (eV) {}
                         }
+                    }
+
+                    if (foundCode) {
+                        processPhysicalBarcode(foundCode);
                     }
                 } finally {
                     isBusy = false;
@@ -865,8 +915,17 @@
     }
 
     function processPhysicalBarcode(rawText) {
-        if (!rawText || state.phase !== 'finding') return;
+        if (!rawText) return;
         const code = String(rawText).trim();
+        console.log('[Finder Scan] 🎯 Decoded barcode:', code);
+
+        // Cooldown debounce: Ignore identical barcode scanned within 2.0 seconds
+        const now = performance.now();
+        const lastScannedTime = state.cooldownMap.get(code) || 0;
+        if (now - lastScannedTime < 2000) {
+            return;
+        }
+        state.cooldownMap.set(code, now);
 
         // Check if code matches any received tote
         let matchedIndex = -1;
@@ -875,7 +934,6 @@
         } else if (state.toteLookup.has(code.toUpperCase())) {
             matchedIndex = state.toteLookup.get(code.toUpperCase());
         } else {
-            // Also check if prefix tsXX- is attached or stripped
             const stripped = code.replace(/^ts\d+-/, '').replace(/-last$/, '');
             if (state.toteLookup.has(stripped)) {
                 matchedIndex = state.toteLookup.get(stripped);
@@ -883,17 +941,11 @@
         }
 
         if (matchedIndex === -1) {
-            // Not in our received truth source
+            // Unlisted barcode (e.g. random barcode or not in current 100 list)
+            playChirp(false);
+            showScannedToteHud(code, 'unlisted');
             return;
         }
-
-        // Cooldown debounce: Ignore identical barcode scanned within 2.2 seconds to prevent repeat flashes
-        const now = performance.now();
-        const lastScannedTime = state.cooldownMap.get(code) || 0;
-        if (now - lastScannedTime < 2200) {
-            return;
-        }
-        state.cooldownMap.set(code, now);
 
         const toteData = state.receivedMap.get(matchedIndex);
         const toteName = toteData ? toteData.tote : code;
@@ -924,7 +976,7 @@
         }
     }
 
-    function showScannedToteHud(toteCode, isNew) {
+    function showScannedToteHud(toteCode, status) {
         if (!elements.findingHudOverlay) return;
 
         // Format barcode: bold last 4 digits
@@ -944,15 +996,21 @@
         if (elements.hudCodeLast4) elements.hudCodeLast4.textContent = last4;
 
         if (elements.hudTitleText) {
-            elements.hudTitleText.textContent = isNew ? 'TOTE FOUND' : 'ALREADY FOUND';
+            if (status === true) elements.hudTitleText.textContent = 'TOTE FOUND';
+            else if (status === false) elements.hudTitleText.textContent = 'ALREADY FOUND';
+            else elements.hudTitleText.textContent = 'UNLISTED BARCODE';
         }
 
         if (elements.hudCheckBadge) {
-            elements.hudCheckBadge.textContent = isNew ? '✅' : 'ℹ️';
+            if (status === true) elements.hudCheckBadge.textContent = '✅';
+            else if (status === false) elements.hudCheckBadge.textContent = 'ℹ️';
+            else elements.hudCheckBadge.textContent = '📦';
         }
 
         if (elements.hudContentCard) {
-            elements.hudContentCard.className = isNew ? 'hud-content-card hud-new' : 'hud-content-card hud-already-found';
+            if (status === true) elements.hudContentCard.className = 'hud-content-card hud-new';
+            else if (status === false) elements.hudContentCard.className = 'hud-content-card hud-already-found';
+            else elements.hudContentCard.className = 'hud-content-card hud-unlisted';
         }
 
         // Show HUD overlay
