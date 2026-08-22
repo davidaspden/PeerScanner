@@ -873,7 +873,7 @@
                         canvas.height = cropH;
                         ctx.drawImage(elements.findingVideo, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
-                        // 3. Quagga2 1D Barcode Engine (Primary JS 1D specialist)
+                        // 3. Quagga2 1D Barcode Engine (Locked strictly to Code 128 with checksum validation)
                         if (typeof Quagga !== 'undefined') {
                             const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
                             foundCode = await new Promise((resolve) => {
@@ -882,8 +882,10 @@
                                         src: dataUrl,
                                         numOfWorkers: 0,
                                         inputStream: { size: Math.max(cropW, cropH) },
+                                        locator: { patchSize: "large", halfSample: true },
                                         decoder: {
-                                            readers: ["code_128_reader", "code_39_reader"]
+                                            readers: ["code_128_reader"],
+                                            multiple: false
                                         },
                                         locate: true
                                     }, function(res) {
@@ -928,8 +930,10 @@
                                             src: rotDataUrl,
                                             numOfWorkers: 0,
                                             inputStream: { size: Math.max(cropW, cropH) },
+                                            locator: { patchSize: "large", halfSample: true },
                                             decoder: {
-                                                readers: ["code_128_reader", "code_39_reader"]
+                                                readers: ["code_128_reader"],
+                                                multiple: false
                                             },
                                             locate: true
                                         }, function(res) {
@@ -974,7 +978,11 @@
     function processPhysicalBarcode(rawText) {
         if (!rawText) return;
         const code = String(rawText).trim();
-        console.log('[Finder Scan] 🎯 Decoded barcode:', code);
+
+        // Reject noise or partial reads (must be at least 4 chars and valid barcode characters)
+        if (code.length < 4 || !/^[A-Za-z0-9_\-\.\:\/]+$/.test(code)) {
+            return;
+        }
 
         // Cooldown debounce: Ignore identical barcode scanned within 2.0 seconds
         const now = performance.now();
@@ -983,6 +991,8 @@
             return;
         }
         state.cooldownMap.set(code, now);
+
+        console.log('[Finder Scan] 🎯 Valid decoded barcode:', code);
 
         // Check if code matches any received tote
         let matchedIndex = -1;
@@ -998,9 +1008,11 @@
         }
 
         if (matchedIndex === -1) {
-            // Unlisted barcode (e.g. random barcode or not in current 100 list)
-            playChirp(false);
-            showScannedToteHud(code, 'unlisted');
+            // Unlisted barcode: only show HUD if it has substantial length (>= 6 chars) to prevent spurious noise
+            if (code.length >= 6) {
+                playChirp(false);
+                showScannedToteHud(code, 'unlisted');
+            }
             return;
         }
 
