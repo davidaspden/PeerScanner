@@ -481,10 +481,8 @@
     }
 
     function queueAckQrUpdate() {
-        if (state.ackDebounceTimer) clearTimeout(state.ackDebounceTimer);
-        state.ackDebounceTimer = setTimeout(() => {
-            updateAckQRCode();
-        }, 100);
+        // Update immediately with zero delay so host webcam gets real-time ACK feedback
+        updateAckQRCode();
     }
 
     function updateAckQRCode() {
@@ -496,13 +494,15 @@
         }
 
         if (count === 0) {
+            elements.ackCanvas.width = 220;
+            elements.ackCanvas.height = 220;
             const ctx = elements.ackCanvas.getContext('2d');
             ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, 200, 200);
+            ctx.fillRect(0, 0, 220, 220);
             ctx.fillStyle = '#64748b';
             ctx.font = 'bold 13px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('Awaiting scans...', 100, 105);
+            ctx.fillText('Awaiting scans...', 110, 115);
             return;
         }
 
@@ -511,19 +511,13 @@
         if (window.QRCodeLib && window.QRCodeLib.drawToCanvas) {
             try {
                 window.QRCodeLib.drawToCanvas(elements.ackCanvas, payload, {
-                    typeNumber: 2,
-                    width: 200,
-                    height: 200,
+                    width: 220,
+                    height: 220,
                     margin: 1,
                     errorCorrectionLevel: 'L'
                 });
             } catch (e) {
-                window.QRCodeLib.drawToCanvas(elements.ackCanvas, payload, {
-                    width: 200,
-                    height: 200,
-                    margin: 1,
-                    errorCorrectionLevel: 'L'
-                });
+                console.warn('ACK QR draw error:', e);
             }
         }
     }
@@ -553,9 +547,8 @@
             const finalPayload = encodeAckHexBitset(state.receivedMap, state.totalCount);
             try {
                 window.QRCodeLib.drawToCanvas(elements.finalAckCanvas, finalPayload, {
-                    typeNumber: 2,
-                    width: 220,
-                    height: 220,
+                    width: 240,
+                    height: 240,
                     margin: 1,
                     errorCorrectionLevel: 'L'
                 });
