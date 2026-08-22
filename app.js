@@ -294,7 +294,8 @@
 
         for (let i = 0; i < total; i++) {
             const isLast = (i === total - 1);
-            const formatted = `ts${i}-${totes[i]}${isLast ? '-last' : ''}`;
+            // Embed total count into every frame: ts{index}/{total}-{toteName}
+            const formatted = `ts${i}/${total}-${totes[i]}${isLast ? '-last' : ''}`;
             state.codes.push(formatted);
             state.activeIndices.push(i);
 
@@ -800,11 +801,17 @@
 
     function getReceiverFullUrl() {
         const href = window.location.href;
+        let target = '';
         if (href.includes('index.html')) {
-            return href.replace('index.html', 'peerGrab.html');
+            target = href.replace('index.html', 'peerGrab.html');
+        } else {
+            const base = href.split('?')[0].split('#')[0];
+            target = base.endsWith('/') ? `${base}peerGrab.html` : `${base}/peerGrab.html`;
         }
-        const base = href.split('?')[0].split('#')[0];
-        return base.endsWith('/') ? `${base}peerGrab.html` : `${base}/peerGrab.html`;
+        
+        target = target.split('?')[0].split('#')[0];
+        const modeParam = (state.broadcastMode === 'multicast') ? 'group' : '1to1';
+        return `${target}?mode=${modeParam}`;
     }
 
     function showReceiverLinkModal() {

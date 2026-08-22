@@ -15,6 +15,7 @@
     const state = {
         phase: 'receiving', // 'receiving' | 'results' | 'finding'
         totalCount: DEFAULT_TOTAL,
+        hasEstablishedTotal: false,
         hasReceivedLastMarker: false,
         receivedMap: new Map(), // index -> { index, tote, rawCode, timestamp }
         toteLookup: new Map(), // normalizedTote -> index
@@ -25,7 +26,7 @@
         isScanning: false,
         isFindingScanning: false,
         isTorchOn: false,
-        currentFacingMode: 'user', // Ingestion defaults to front camera
+        currentFacingMode: 'user', // Ingestion: 'user' (1-to-1) or 'environment' (Group)
         findingFacingMode: 'environment', // Finding defaults to rear camera
         camStream: null,
         findingCamStream: null,
@@ -194,7 +195,7 @@
         state.clientTransmissionMode = mode; // '1to1' or 'group'
 
         if (mode === '1to1') {
-            state.clientFacingMode = 'user'; // Front camera for desk-based 1-to-1 handshake
+            state.currentFacingMode = 'user'; // Front camera for desk-based 1-to-1 handshake
             if (elements.clientMode1to1Btn) {
                 elements.clientMode1to1Btn.classList.add('btn-primary');
                 elements.clientMode1to1Btn.classList.remove('btn-secondary');
@@ -211,7 +212,7 @@
                 elements.ackPanelCol.style.display = 'flex';
             }
         } else {
-            state.clientFacingMode = 'environment'; // Rear camera for scanning large group broadcast screen
+            state.currentFacingMode = 'environment'; // Rear camera for scanning large group broadcast screen
             if (elements.clientModeGroupBtn) {
                 elements.clientModeGroupBtn.classList.add('btn-primary');
                 elements.clientModeGroupBtn.classList.remove('btn-secondary');
@@ -229,7 +230,7 @@
             }
         }
 
-        if (state.phase === 'receiver') {
+        if (state.phase === 'receiving') {
             startCamera();
         }
     }
@@ -241,6 +242,19 @@
     function buildGridDOM() {
         if (!elements.clientGrid) return;
         elements.clientGrid.innerHTML = '';
+
+        if (!state.hasEstablishedTotal && state.receivedMap.size === 0) {
+            const hint = document.createElement('div');
+            hint.style.gridColumn = '1 / -1';
+            hint.style.padding = '14px 10px';
+            hint.style.textAlign = 'center';
+            hint.style.color = 'var(--text-muted)';
+            hint.style.fontSize = '0.78rem';
+            hint.style.fontStyle = 'italic';
+            hint.textContent = 'Point camera at host broadcast to establish barcode manifest...';
+            elements.clientGrid.appendChild(hint);
+            return;
+        }
 
         for (let i = 0; i < state.totalCount; i++) {
             const block = document.createElement('div');
@@ -254,8 +268,9 @@
     }
 
     function setTargetTotal(count) {
-        if (count === state.totalCount && state.hasReceivedLastMarker) return;
+        if (state.hasEstablishedTotal && count === state.totalCount) return;
         state.totalCount = count;
+        state.hasEstablishedTotal = true;
         state.hasReceivedLastMarker = true;
 
         if (elements.targetTotalText) elements.targetTotalText.textContent = count;
@@ -394,14 +409,19 @@
         if (!text || typeof text !== 'string' || state.phase !== 'receiving') return;
         text = text.trim();
 
-        const match = text.match(/^ts(\d+)-(.+?)(-last)?$/);
+        // Supports both ts{index}/{total}-{toteName} and legacy ts{index}-{toteName}
+        const match = text.match(/^ts(\d+)(?:\/(\d+))?-(.+?)(-last)?$/);
         if (!match) return;
 
         const index = parseInt(match[1], 10);
-        const rawTote = match[2];
-        const isLast = Boolean(match[3]);
+        const frameTotal = match[2] ? parseInt(match[2], 10) : null;
+        const rawTote = match[3];
+        const isLast = Boolean(match[4]);
 
-        if (isLast && !state.hasReceivedLastMarker) {
+        // Establish target total immediately on the very first frame!
+        if (frameTotal && frameTotal > 0 && (!state.hasEstablishedTotal || state.totalCount !== frameTotal)) {
+            setTargetTotal(frameTotal);
+        } else if (isLast && !state.hasEstablishedTotal) {
             setTargetTotal(index + 1);
         }
 
@@ -443,21 +463,22 @@
         updateProgressUI();
         queueAckQrUpdate();
 
-        if (state.receivedMap.size >= state.totalCount) {
+        if (state.hasEstablishedTotal && state.receivedMap.size >= state.totalCount) {
             onAllTotesIngested();
         }
     }
 
     function updateProgressUI() {
         const count = (state.phase === 'finding') ? state.foundMap.size : state.receivedMap.size;
-        const total = state.totalCount;
-        const percent = Math.min(100, Math.round((count / total) * 100));
+        const isTotalKnown = state.hasEstablishedTotal || state.phase === 'finding';
+        const total = isTotalKnown ? state.totalCount : '--';
+        const percent = isTotalKnown ? Math.min(100, Math.round((count / state.totalCount) * 100)) : 0;
 
         if (elements.capturedCountText) elements.capturedCountText.textContent = count;
         if (elements.targetTotalText) elements.targetTotalText.textContent = total;
         if (elements.navPillCount) elements.navPillCount.textContent = count;
         if (elements.navPillTotal) elements.navPillTotal.textContent = total;
-        if (elements.progressPercentText) elements.progressPercentText.textContent = `${percent}%`;
+        if (elements.progressPercentText) elements.progressPercentText.textContent = isTotalKnown ? `${percent}%` : '--%';
         if (elements.progressBarFill) elements.progressBarFill.style.width = `${percent}%`;
 
         // Terminology & Left-to-Right Progress Gradient Fill on Nav Pill
@@ -638,6 +659,7 @@
     // =========================================================================
 
     async function enterFindingMode() {
+        await stopCamera();
         state.phase = 'finding';
 
         // If entering finding mode directly without receiving QR stream first, auto-load from localStorage or samples
