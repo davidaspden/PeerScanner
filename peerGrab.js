@@ -1349,18 +1349,33 @@
         if (elements.findingExitBtn) elements.findingExitBtn.addEventListener('click', exitFindingMode);
         if (elements.closeDrawerBtn) elements.closeDrawerBtn.addEventListener('click', toggleFindingListDrawer);
 
+        // Direct Finding Trigger
+        const directFindingBtn = document.getElementById('directFindingBtn');
+        if (directFindingBtn) directFindingBtn.addEventListener('click', enterFindingMode);
+
         window.addEventListener('beforeunload', () => {
             stopCamera();
             stopFindingCamera();
         });
     }
 
-    function init() {
+    async function init() {
         buildGridDOM();
         bindEvents();
-        setViewMode('split');
-        updateProgressUI();
-        startCamera();
+
+        // Check if URL specifies direct finding mode (e.g. peerGrab.html?mode=finding or peerGrab.html#finding)
+        const urlParams = new URLSearchParams(window.location.search);
+        const isDirectFinding = urlParams.get('mode') === 'finding' || 
+                                urlParams.get('find') === '1' || 
+                                window.location.hash.includes('finding');
+
+        if (isDirectFinding) {
+            await enterFindingMode();
+        } else {
+            setViewMode('split');
+            updateProgressUI();
+            startCamera();
+        }
     }
 
     if (document.readyState === 'loading') {
