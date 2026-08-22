@@ -656,6 +656,10 @@
     }
 
     async function stopFindingCamera() {
+        if (state.findingAnimFrameId) {
+            cancelAnimationFrame(state.findingAnimFrameId);
+            state.findingAnimFrameId = null;
+        }
         if (state.findingScanInterval) {
             clearInterval(state.findingScanInterval);
             state.findingScanInterval = null;
@@ -681,21 +685,23 @@
 
         try {
             let stream = null;
-            // Prefer rear environment camera for physical barcode hunting
+            // Prefer rear environment camera with HD resolution for physical barcode hunting
             try {
                 stream = await navigator.mediaDevices.getUserMedia({
                     audio: false,
                     video: {
                         facingMode: { ideal: state.findingFacingMode },
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                        width: { ideal: 1920, min: 1280 },
+                        height: { ideal: 1080, min: 720 }
                     }
                 });
             } catch (errPref) {
-                console.warn('Finding rear camera failed, fallback to generic video:', errPref);
+                console.warn('Finding HD camera failed, fallback to standard video:', errPref);
                 stream = await navigator.mediaDevices.getUserMedia({
                     audio: false,
-                    video: true
+                    video: {
+                        facingMode: { ideal: state.findingFacingMode }
+                    }
                 });
             }
 
@@ -715,10 +721,7 @@
     }
 
     async function toggleTorch() {
-        if (!state.findingCamStream) {
-            showToast('Camera not active', 'info');
-            return;
-        }
+        if (!state.findingCamStream) return;
 
         const track = state.findingCamStream.getVideoTracks()[0];
         if (!track) return;
@@ -737,11 +740,10 @@
                     elements.findingTorchBtn.classList.toggle('btn-secondary', !state.isTorchOn);
                 }
             } else {
-                showToast('Camera torch not supported on this browser/lens', 'info');
+                showToast('Torch control not available on this browser/lens', 'info', 2000);
             }
         } catch (err) {
             console.warn('Torch constraint error:', err);
-            showToast('Unable to activate torch: ' + (err.message || 'Not supported'), 'info');
         }
     }
 
@@ -752,18 +754,15 @@
     }
 
     function startFindingScanLoop() {
-        // Initialize BarcodeDetector locked strictly to Code 128 for maximum GPU decoding speed
+        // Initialize BarcodeDetector for Code 128 (hardware accelerated)
         if ('BarcodeDetector' in window && !state.findingBarcodeDetector) {
             try {
                 state.findingBarcodeDetector = new BarcodeDetector({
-                    formats: ['code_128']
+                    formats: ['code_128', 'code_39', 'ean_13', 'upc_a']
                 });
             } catch (e) {
-                // Fallback to general formats if strict code_128 fails
                 try {
-                    state.findingBarcodeDetector = new BarcodeDetector({
-                        formats: ['code_128', 'code_39', 'ean_13', 'upc_a']
-                    });
+                    state.findingBarcodeDetector = new BarcodeDetector();
                 } catch (e2) {}
             }
         }
@@ -773,7 +772,7 @@
             try {
                 const hints = new Map();
                 if (ZXing.BarcodeFormat && ZXing.BarcodeFormat.CODE_128) {
-                    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128]);
+                    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39]);
                 }
                 state.zxingReader = new ZXing.BrowserMultiFormatReader(hints);
             } catch (e) {
@@ -786,82 +785,83 @@
         const rotatedCanvas = document.createElement('canvas');
         const rotCtx = rotatedCanvas.getContext('2d', { willReadFrequently: true });
 
-        state.findingScanInterval = setInterval(async () => {
+        let isBusy = false;
+
+        async function processFrame() {
             if (!state.isFindingScanning || !elements.findingVideo || state.phase !== 'finding') return;
-            if (elements.findingVideo.readyState < 2) return;
 
-            const vWidth = elements.findingVideo.videoWidth || 640;
-            const vHeight = elements.findingVideo.videoHeight || 480;
+            if (!isBusy && elements.findingVideo.readyState >= 2) {
+                isBusy = true;
 
-            // Reticle Target Region (Center 84% width, vertical center between 20% and 80% height)
-            const minX = vWidth * 0.08;
-            const maxX = vWidth * 0.92;
-            const minY = vHeight * 0.20;
-            const maxY = vHeight * 0.80;
-
-            // 1. Native Hardware BarcodeDetector (Zero-copy, 3-8ms, omnidirectional 0° & 90°)
-            if (state.findingBarcodeDetector) {
                 try {
-                    const barcodes = await state.findingBarcodeDetector.detect(elements.findingVideo);
-                    if (barcodes && barcodes.length > 0) {
-                        for (const b of barcodes) {
-                            if (b.boundingBox) {
-                                const cx = b.boundingBox.x + b.boundingBox.width / 2;
-                                const cy = b.boundingBox.y + b.boundingBox.height / 2;
-                                if (cx < minX || cx > maxX || cy < minY || cy > maxY) {
-                                    continue;
+                    const vWidth = elements.findingVideo.videoWidth || 640;
+                    const vHeight = elements.findingVideo.videoHeight || 480;
+
+                    // 1. Native Hardware BarcodeDetector (Zero-copy GPU direct from video stream, 3-6ms)
+                    if (state.findingBarcodeDetector) {
+                        try {
+                            const barcodes = await state.findingBarcodeDetector.detect(elements.findingVideo);
+                            if (barcodes && barcodes.length > 0) {
+                                for (const b of barcodes) {
+                                    if (b.rawValue) processPhysicalBarcode(b.rawValue);
                                 }
                             }
-                            if (b.rawValue) processPhysicalBarcode(b.rawValue);
+                        } catch (eDet) {}
+                    } else if (state.zxingReader) {
+                        // 2. JavaScript Fallback (Cropped to large square reticle with 0° & 90° rotation)
+                        const size = Math.min(vWidth, vHeight) * 0.85;
+                        const cropX = Math.floor((vWidth - size) / 2);
+                        const cropY = Math.floor((vHeight - size) / 2);
+                        const cropW = Math.floor(size);
+                        const cropH = Math.floor(size);
+
+                        canvas.width = cropW;
+                        canvas.height = cropH;
+                        ctx.drawImage(elements.findingVideo, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+                        const img = ctx.getImageData(0, 0, cropW, cropH);
+                        const lumSource = new ZXing.RGBLuminanceSource(img.data, cropW, cropH);
+                        const binBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lumSource));
+                        
+                        let decoded = false;
+                        try {
+                            const result = state.zxingReader.decodeBitmap(binBitmap);
+                            if (result && result.getText()) {
+                                processPhysicalBarcode(result.getText());
+                                decoded = true;
+                            }
+                        } catch (eH) {}
+
+                        // If horizontal failed, check 90° rotated vertical in fallback
+                        if (!decoded) {
+                            rotatedCanvas.width = cropH;
+                            rotatedCanvas.height = cropW;
+                            rotCtx.save();
+                            rotCtx.translate(cropH / 2, cropW / 2);
+                            rotCtx.rotate(Math.PI / 2);
+                            rotCtx.drawImage(canvas, -cropW / 2, -cropH / 2);
+                            rotCtx.restore();
+
+                            const imgRot = rotCtx.getImageData(0, 0, cropH, cropW);
+                            const lumRot = new ZXing.RGBLuminanceSource(imgRot.data, cropH, cropW);
+                            const binRot = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lumRot));
+                            try {
+                                const resultRot = state.zxingReader.decodeBitmap(binRot);
+                                if (resultRot && resultRot.getText()) {
+                                    processPhysicalBarcode(resultRot.getText());
+                                }
+                            } catch (eV) {}
                         }
-                        return;
                     }
-                } catch (e) {}
+                } finally {
+                    isBusy = false;
+                }
             }
 
-            // 2. JavaScript Fallback (Cropped to Reticle, with dual-axis 0° & 90° vertical rotation)
-            if (state.zxingReader) {
-                try {
-                    const cropX = Math.floor(vWidth * 0.08);
-                    const cropY = Math.floor(vHeight * 0.22);
-                    const cropW = Math.floor(vWidth * 0.84);
-                    const cropH = Math.floor(vHeight * 0.56);
+            state.findingAnimFrameId = requestAnimationFrame(processFrame);
+        }
 
-                    // Pass A: Horizontal (0°)
-                    canvas.width = cropW;
-                    canvas.height = cropH;
-                    ctx.drawImage(elements.findingVideo, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-                    
-                    const img = ctx.getImageData(0, 0, cropW, cropH);
-                    const lumSource = new ZXing.RGBLuminanceSource(img.data, cropW, cropH);
-                    const binBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lumSource));
-                    try {
-                        const result = state.zxingReader.decodeBitmap(binBitmap);
-                        if (result && result.getText()) {
-                            processPhysicalBarcode(result.getText());
-                            return;
-                        }
-                    } catch (eH) {}
-
-                    // Pass B: Vertical (90° Rotated for vertical barcodes on tote sides)
-                    rotatedCanvas.width = cropH;
-                    rotatedCanvas.height = cropW;
-                    rotCtx.save();
-                    rotCtx.translate(cropH / 2, cropW / 2);
-                    rotCtx.rotate(Math.PI / 2);
-                    rotCtx.drawImage(canvas, -cropW / 2, -cropH / 2);
-                    rotCtx.restore();
-
-                    const imgRot = rotCtx.getImageData(0, 0, cropH, cropW);
-                    const lumRot = new ZXing.RGBLuminanceSource(imgRot.data, cropH, cropW);
-                    const binRot = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lumRot));
-                    const resultRot = state.zxingReader.decodeBitmap(binRot);
-                    if (resultRot && resultRot.getText()) {
-                        processPhysicalBarcode(resultRot.getText());
-                    }
-                } catch (e) {}
-            }
-        }, 60);
+        state.findingAnimFrameId = requestAnimationFrame(processFrame);
     }
 
     function processPhysicalBarcode(rawText) {
