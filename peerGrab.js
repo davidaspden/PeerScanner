@@ -214,33 +214,48 @@
         }
 
         try {
-            const constraints = {
-                audio: false,
-                video: {
-                    facingMode: { ideal: state.currentFacingMode },
-                    width: { ideal: 640 },
-                    height: { ideal: 480 }
-                }
-            };
+            let stream = null;
+            // 1. Try with preferred facingMode
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    audio: false,
+                    video: {
+                        facingMode: { ideal: state.currentFacingMode },
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    }
+                });
+            } catch (errPreferred) {
+                console.warn('Preferred camera facingMode failed, attempting basic video constraint:', errPreferred);
+                // 2. Fallback to any available video stream (e.g. desktop/laptop webcam)
+                stream = await navigator.mediaDevices.getUserMedia({
+                    audio: false,
+                    video: true
+                });
+            }
 
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
             state.camStream = stream;
 
             if (elements.clientVideo) {
                 elements.clientVideo.srcObject = stream;
-                await elements.clientVideo.play();
+                // Wait for video stream to start playback
+                await elements.clientVideo.play().catch(e => {
+                    console.warn('Auto-play caught:', e);
+                });
             }
 
             state.isScanning = true;
-            if (elements.camLoading) elements.camLoading.style.display = 'none';
+            if (elements.camLoading) {
+                elements.camLoading.style.display = 'none';
+            }
 
             startScanLoop();
         } catch (err) {
             console.error('Client camera error:', err);
             if (elements.camLoadingText) {
-                elements.camLoadingText.textContent = 'Camera error: ' + (err.message || err.name || 'Denied');
+                elements.camLoadingText.textContent = 'Camera error: ' + (err.message || err.name || 'Permission Denied');
             }
-            showToast('Camera error: ' + (err.message || err.name), 'error');
+            showToast('Camera error: ' + (err.message || err.name || 'Check permissions'), 'error');
         }
     }
 

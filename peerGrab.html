@@ -40,12 +40,12 @@
                 <button id="viewSplitBtn" class="btn btn-sm btn-primary" title="Show camera and ACK QR side by side">🔲 Split View</button>
                 <button id="viewMaxAckBtn" class="btn btn-sm btn-secondary" title="Maximize ACK QR for host webcam">⚡ Maximize ACK QR</button>
                 <button id="viewMaxCamBtn" class="btn btn-sm btn-secondary" title="Maximize Camera viewfinder">📷 Maximize Camera</button>
-                <button id="clientFlipCamBtn" class="btn btn-sm btn-secondary" title="Switch between front and rear cameras">🔄 Flip Camera</button>
+                <button id="flipClientCamBtn" class="btn btn-sm btn-secondary" title="Switch between front and rear cameras">🔄 Flip Camera</button>
             </div>
 
             <!-- STICKY TOP VIEW: CAMERA + LIVE ACK QR -->
             <div class="sticky-top-panel card">
-                <div class="top-panel-grid mode-split" id="topPanelGrid">
+                <div class="top-panel-grid mode-split" id="panelGridContainer">
                     <!-- Column 1: Camera Viewfinder -->
                     <div class="cam-panel-column" id="camPanelCol" title="Tap to maximize camera viewfinder">
                         <div class="panel-header-mini">
@@ -53,14 +53,15 @@
                         </div>
                         <div class="camera-stream-box" id="cameraBox">
                             <video id="clientVideo" playsinline autoplay muted></video>
+                            <canvas id="clientScanCanvas" style="display: none;"></canvas>
                             <div class="grab-scanner-overlay">
-                                <div class="grab-scan-box" id="scanReticleBox">
+                                <div class="grab-scan-box" id="clientScanBox">
                                     <div class="grab-scan-laser"></div>
                                 </div>
                             </div>
-                            <div id="camLoadingOverlay" class="camera-loading-overlay">
+                            <div id="camLoading" class="camera-loading-overlay">
                                 <div class="spinner"></div>
-                                <span>Starting camera...</span>
+                                <span id="camLoadingText">Starting front camera...</span>
                             </div>
                         </div>
                     </div>
@@ -69,7 +70,7 @@
                     <div class="ack-panel-column" id="ackPanelCol" title="Tap to maximize ACK QR code">
                         <div class="panel-header-mini">
                             <span class="panel-tag">⚡ Live ACK QR</span>
-                            <span class="badge ack-count-badge" id="ackCountBadge">0 ACK'd</span>
+                            <span class="badge ack-count-badge" id="ackCountBadge">0 / 100</span>
                         </div>
                         <div class="ack-canvas-box" id="ackCanvasBox">
                             <canvas id="ackCanvas" width="180" height="180"></canvas>
@@ -81,14 +82,14 @@
                 <!-- Last Scanned Code Banner -->
                 <div class="last-grabbed-banner" id="lastGrabbedBanner">
                     <span class="grab-label">Last Scanned:</span>
-                    <span class="grab-value" id="lastGrabbedDisplay">Waiting for QR frames...</span>
+                    <span class="grab-value" id="lastCapturedCode">Waiting for QR frames...</span>
                 </div>
 
                 <!-- Live Numerical Progress -->
                 <div class="progress-bar-container">
                     <div class="progress-stat-row">
-                        <span class="progress-title">Reconstruction Progress</span>
-                        <span class="progress-percentage" id="progressPercentage">0%</span>
+                        <span class="progress-title">Captured: <strong id="capturedCountText">0</strong> / <strong id="targetTotalText">100</strong></span>
+                        <span class="progress-percentage" id="progressPercentText">0%</span>
                     </div>
                     <div class="progress-bar-track">
                         <div class="progress-bar-fill" id="progressBarFill" style="width: 0%;"></div>
@@ -146,9 +147,9 @@
          ==================================================================== -->
     <footer class="fixed-bottom-bar" id="fixedBottomBar" style="display: none;">
         <div class="bottom-bar-inner">
-            <button id="copyAllBtn" class="btn btn-secondary btn-sm" title="Copy all Totes to clipboard">📋 Copy All</button>
+            <button id="copyAllBtn" class="btn btn-secondary btn-sm" title="Copy all barcodes to clipboard">📋 Copy All</button>
             <button id="exportJsonBtn" class="btn btn-primary btn-sm" title="Export as JSON file">💾 Export JSON</button>
-            <button id="toggleListBtn" class="btn btn-secondary btn-sm" title="Show or hide the detailed list of Totes">📜 Show List</button>
+            <button id="toggleListBtn" class="btn btn-secondary btn-sm" title="Show or hide the detailed list of barcodes">📜 Show List</button>
             <button id="scanAgainBtn" class="btn btn-secondary btn-sm" title="Reset and scan a new batch">🔄 Reset</button>
         </div>
     </footer>
