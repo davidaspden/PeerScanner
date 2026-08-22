@@ -111,6 +111,10 @@
         closeDrawerBtn: document.getElementById('closeDrawerBtn'),
         drawerFoundCount: document.getElementById('drawerFoundCount'),
         drawerTotalCount: document.getElementById('drawerTotalCount'),
+        drawerExitSummaryBtn: document.getElementById('drawerExitSummaryBtn'),
+        drawerClearAllBtn: document.getElementById('drawerClearAllBtn'),
+        drawerResetBtnLabel: document.getElementById('drawerResetBtnLabel'),
+        drawerResetProgressFill: document.getElementById('drawerResetProgressFill'),
         
         // Fixed Bottom Bar
         fixedBottomBar: document.getElementById('fixedBottomBar'),
@@ -1279,59 +1283,78 @@
     // 5-SECOND LONG PRESS DESTRUCTIVE RESET HANDLER
     // =========================================================================
 
-    function startLongPressReset(e) {
-        if (e.type === 'pointerdown' && e.button !== 0) return; // Left click only
-        
-        state.longPressStartTime = performance.now();
-        if (elements.scanAgainBtn) elements.scanAgainBtn.classList.add('long-press-active');
+    function setupLongPressReset(btn, label, progressFill, defaultText) {
+        if (!btn) return;
+        let startTime = 0;
+        let animId = null;
 
-        function animateProgress(now) {
-            const elapsed = now - state.longPressStartTime;
-            const progress = Math.min(1, elapsed / LONG_PRESS_MS);
-            const percent = Math.round(progress * 100);
+        function start(e) {
+            if (e.type === 'pointerdown' && e.button !== 0) return; // Left click only
+            startTime = performance.now();
+            btn.classList.add('long-press-active');
 
-            if (elements.resetProgressFill) {
-                elements.resetProgressFill.style.width = `${percent}%`;
+            function animate(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(1, elapsed / LONG_PRESS_MS);
+                const percent = Math.round(progress * 100);
+
+                if (progressFill) progressFill.style.width = `${percent}%`;
+                if (label) {
+                    const rem = Math.max(0, Math.ceil((LONG_PRESS_MS - elapsed) / 1000));
+                    label.textContent = `⚠️ Hold ${rem}s...`;
+                }
+
+                if (progress < 1) {
+                    animId = requestAnimationFrame(animate);
+                } else {
+                    cancel();
+                    executeFullReset();
+                }
             }
-
-            if (elements.resetBtnLabel) {
-                const remaining = Math.max(0, Math.ceil((LONG_PRESS_MS - elapsed) / 1000));
-                elements.resetBtnLabel.textContent = `⚠️ Hold ${remaining}s...`;
-            }
-
-            if (progress < 1) {
-                state.longPressAnimId = requestAnimationFrame(animateProgress);
-            } else {
-                // 5 seconds completed!
-                executeFullReset();
-            }
+            animId = requestAnimationFrame(animate);
         }
 
-        state.longPressAnimId = requestAnimationFrame(animateProgress);
-    }
-
-    function cancelLongPressReset() {
-        if (state.longPressAnimId) {
-            cancelAnimationFrame(state.longPressAnimId);
-            state.longPressAnimId = null;
+        function cancel() {
+            if (animId) {
+                cancelAnimationFrame(animId);
+                animId = null;
+            }
+            btn.classList.remove('long-press-active');
+            if (progressFill) progressFill.style.width = '0%';
+            if (label) label.textContent = defaultText;
         }
 
-        if (elements.scanAgainBtn) elements.scanAgainBtn.classList.remove('long-press-active');
-        if (elements.resetProgressFill) elements.resetProgressFill.style.width = '0%';
-        if (elements.resetBtnLabel) elements.resetBtnLabel.textContent = '🔄 Reset (Hold 5s)';
+        btn.addEventListener('pointerdown', start);
+        btn.addEventListener('pointerup', cancel);
+        btn.addEventListener('pointercancel', cancel);
+        btn.addEventListener('pointerleave', cancel);
+        btn.addEventListener('contextmenu', e => e.preventDefault());
     }
 
     async function executeFullReset() {
-        cancelLongPressReset();
         playResetTone();
 
         try {
             if ('vibrate' in navigator) navigator.vibrate([150, 50, 150]);
         } catch (e) {}
 
+        try {
+            localStorage.removeItem('peerScanner_barcodes');
+        } catch (e) {}
+
+        // If in finding mode, navigate to clean base URL
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('mode') === 'finding' || window.location.hash.includes('finding')) {
+            const cleanBase = window.location.href.split('?')[0].split('#')[0];
+            window.location.replace(cleanBase);
+            return;
+        }
+
         // Reset all application state
         state.phase = 'receiving';
         state.hasReceivedLastMarker = false;
+        state.hasEstablishedTotal = false;
+        state.totalCount = DEFAULT_TOTAL;
         state.receivedMap.clear();
         state.toteLookup.clear();
         state.foundMap.clear();
@@ -1355,7 +1378,7 @@
         setViewMode('split');
         await startCamera();
 
-        showToast('Application reset. Ready for new QR broadcast.', 'info');
+        showToast('Session & barcodes cleared! Ready for new QR broadcast.', 'info');
     }
 
     // =========================================================================
@@ -1456,20 +1479,16 @@
         if (elements.copyAllBtn) elements.copyAllBtn.addEventListener('click', copyAllToClipboard);
         if (elements.toggleListBtn) elements.toggleListBtn.addEventListener('click', toggleListVisibility);
 
-        // 5-Second Long Press Reset Handlers
-        if (elements.scanAgainBtn) {
-            elements.scanAgainBtn.addEventListener('pointerdown', startLongPressReset);
-            elements.scanAgainBtn.addEventListener('pointerup', cancelLongPressReset);
-            elements.scanAgainBtn.addEventListener('pointercancel', cancelLongPressReset);
-            elements.scanAgainBtn.addEventListener('pointerleave', cancelLongPressReset);
-            elements.scanAgainBtn.addEventListener('contextmenu', e => e.preventDefault());
-        }
+        // 5-Second Long Press Reset Handlers (Results Footer & Finding Drawer)
+        setupLongPressReset(elements.scanAgainBtn, elements.resetBtnLabel, elements.resetProgressFill, '🔄 Reset (Hold 5s)');
+        setupLongPressReset(elements.drawerClearAllBtn, elements.drawerResetBtnLabel, elements.drawerResetProgressFill, '🗑️ Clear All (Hold 5s)');
 
         // Finding Mode Controls
         if (elements.findingListToggleBtn) elements.findingListToggleBtn.addEventListener('click', toggleFindingListDrawer);
         if (elements.findingTorchBtn) elements.findingTorchBtn.addEventListener('click', toggleTorch);
         if (elements.findingFlipCamBtn) elements.findingFlipCamBtn.addEventListener('click', flipFindingCamera);
         if (elements.findingExitBtn) elements.findingExitBtn.addEventListener('click', exitFindingMode);
+        if (elements.drawerExitSummaryBtn) elements.drawerExitSummaryBtn.addEventListener('click', exitFindingMode);
         if (elements.closeDrawerBtn) elements.closeDrawerBtn.addEventListener('click', toggleFindingListDrawer);
 
         // Top Navigation Pill Click (Instant Drawer Access)

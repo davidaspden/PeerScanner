@@ -430,13 +430,13 @@ body.receiver-body {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    flex: 1;
-    min-width: 170px;
+    flex: 1 1 auto;
 }
 
 .test-count-input {
-    width: 68px;
-    padding: 7px 8px;
+    width: 65px;
+    height: 38px;
+    padding: 6px 8px;
     background: rgba(15, 23, 42, 0.85);
     border: 1px solid rgba(56, 189, 248, 0.4);
     border-radius: var(--radius-sm);
@@ -445,12 +445,15 @@ body.receiver-body {
     font-weight: 700;
     font-size: 0.88rem;
     text-align: center;
+    box-sizing: border-box;
 }
 
 .input-actions-row .btn {
-    flex: 1;
+    flex: 1 1 auto;
     min-width: 120px;
-    font-size: 0.8rem;
+    height: 38px;
+    font-size: 0.82rem;
+    white-space: nowrap;
 }
 
 /* ==========================================================================
@@ -1597,23 +1600,34 @@ body.receiver-body {
 /* Finding Floating Bottom Controls */
 .finding-floating-controls {
     position: absolute;
-    bottom: 20px;
+    bottom: 24px;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
     align-items: center;
-    gap: 10px;
+    justify-content: center;
     z-index: 850;
     width: 90%;
-    max-width: 400px;
+    max-width: 320px;
 }
 
-.finding-floating-controls .btn {
-    flex: 1;
-    background: rgba(15, 23, 42, 0.9);
+.finding-show-list-btn {
+    width: 100%;
+    padding: 12px 24px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    border-radius: var(--radius-md);
+    letter-spacing: 0.5px;
+    background: rgba(14, 165, 233, 0.9) !important;
     backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(14, 165, 233, 0.4) !important;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.finding-show-list-btn:active {
+    transform: scale(0.97);
 }
 
 /* Finding Checklist Drawer */
@@ -1638,13 +1652,29 @@ body.receiver-body {
 }
 
 .finding-checklist {
-    max-height: 65vh;
+    max-height: 52vh;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     display: flex;
     flex-direction: column;
     gap: 6px;
     padding-right: 4px;
+}
+
+.drawer-actions-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin-top: auto;
+}
+
+.drawer-actions-row .btn {
+    flex: 1;
+    padding: 10px 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
 }
 
 @keyframes slideUp {

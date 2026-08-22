@@ -240,8 +240,10 @@
      * Generate custom count of sample Barcodes (configurable in test mode)
      */
     function generate100SampleTotes(forcedCount = null) {
-        let count = forcedCount || 100;
-        if (!forcedCount && elements.testRandomCountInput) {
+        let count = 100;
+        if (typeof forcedCount === 'number' && forcedCount > 0) {
+            count = forcedCount;
+        } else if (elements.testRandomCountInput) {
             const val = parseInt(elements.testRandomCountInput.value, 10);
             if (!isNaN(val) && val > 0) count = val;
         }
@@ -262,7 +264,7 @@
             saveInputToStorage();
             updateInputCount();
         }
-        showToast(`Generated ${count} sample barcodes!`, 'info');
+        showToast(`Generated ${count} sample barcodes!`, 'success');
     }
 
     function checkTestMode() {
@@ -889,12 +891,8 @@
             elements.liveModeToggleBtn.addEventListener('click', toggleLiveBroadcastMode);
         }
 
-        if (elements.totesInput) {
-            elements.totesInput.addEventListener('input', updateInputCount);
-        }
-
         if (elements.generateSampleBtn) {
-            elements.generateSampleBtn.addEventListener('click', generate100SampleTotes);
+            elements.generateSampleBtn.addEventListener('click', () => generate100SampleTotes());
         }
 
         if (elements.totesInput) {

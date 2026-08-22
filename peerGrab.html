@@ -173,12 +173,9 @@
                     </div>
                 </div>
 
-                <!-- Finding Mode Floating Bottom Controls -->
+                <!-- Finding Mode Floating Bottom Controls: Overlay just for Show List -->
                 <div class="finding-floating-controls">
-                    <button id="findingListToggleBtn" class="btn btn-secondary btn-sm">📋 List</button>
-                    <button id="findingTorchBtn" class="btn btn-secondary btn-sm" title="Toggle camera flashlight">🔦 Torch</button>
-                    <button id="findingFlipCamBtn" class="btn btn-secondary btn-sm">🔄 Flip</button>
-                    <button id="findingExitBtn" class="btn btn-secondary btn-sm">🔙 Summary</button>
+                    <button id="findingListToggleBtn" class="btn btn-primary btn-md finding-show-list-btn">📋 Show List</button>
                 </div>
             </div>
 
@@ -187,10 +184,19 @@
                 <div class="drawer-header">
                     <div class="section-title-row">
                         <h3>Totes Checklist (<span id="drawerFoundCount">0</span> / <span id="drawerTotalCount">100</span> Found)</h3>
-                        <button id="closeDrawerBtn" class="drawer-close-btn">&times;</button>
+                        <button id="closeDrawerBtn" class="drawer-close-btn" title="Close checklist">&times;</button>
                     </div>
                 </div>
                 <div class="scanned-list finding-checklist" id="findingChecklist"></div>
+
+                <!-- Drawer Action Footer with 5-Second Long Press Clear All Button -->
+                <div class="drawer-actions-row">
+                    <button id="drawerExitSummaryBtn" class="btn btn-secondary btn-sm">🔙 Summary</button>
+                    <button id="drawerClearAllBtn" class="btn btn-danger btn-sm long-press-reset-btn" title="Hold for 5 seconds to clear all barcodes and reset">
+                        <span class="btn-label" id="drawerResetBtnLabel">🗑️ Clear All (Hold 5s)</span>
+                        <div class="long-press-progress-bar" id="drawerResetProgressFill"></div>
+                    </button>
+                </div>
             </div>
         </section>
 
