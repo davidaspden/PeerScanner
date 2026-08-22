@@ -851,45 +851,83 @@
             }
         }
 
-        // 2. Continuous Hardware BarcodeDetector Loop (Strictly Code 128)
-        if (has1DBarcodeDetector && state.findingBarcodeDetector) {
-            state.findingScanInterval = setInterval(async () => {
-                if (!state.isFindingScanning || !elements.findingVideo || elements.findingVideo.readyState < 2) return;
+        // 2. Initialize ZXing Code 128 Reader
+        if (typeof ZXing !== 'undefined' && !state.zxingReader) {
+            try {
+                const hints = new Map();
+                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128]);
+                hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+                state.zxingReader = new ZXing.BrowserMultiFormatReader(hints);
+            } catch (eZxing) {
+                console.error('[Finder Scan] ZXing init error:', eZxing);
+            }
+        }
+
+        const scanCanvas = document.createElement('canvas');
+        const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
+        const rotCanvas = document.createElement('canvas');
+        const rotCtx = rotCanvas.getContext('2d', { willReadFrequently: true });
+
+        // 3. Controlled Scanning Loop (60ms interval, Hardware BarcodeDetector + ZXing 0°/90°)
+        state.findingScanInterval = setInterval(async () => {
+            if (!state.isFindingScanning || !elements.findingVideo || state.phase !== 'finding') return;
+            if (elements.findingVideo.readyState < 2) return;
+
+            let foundCode = null;
+
+            // Step 1: Hardware GPU BarcodeDetector (Zero-copy on Android/iOS)
+            if (state.findingBarcodeDetector) {
                 try {
                     const barcodes = await state.findingBarcodeDetector.detect(elements.findingVideo);
                     if (barcodes && barcodes.length > 0) {
                         for (const b of barcodes) {
-                            if (b.rawValue) processPhysicalBarcode(b.rawValue);
+                            if (b.rawValue) {
+                                foundCode = b.rawValue;
+                                break;
+                            }
                         }
                     }
                 } catch (eDet) {}
-            }, 60);
-        }
-
-        // 3. ZXing Continuous Live Stream Decoder (Strictly Code 128)
-        if (typeof ZXing !== 'undefined' && elements.findingVideo) {
-            try {
-                if (state.zxingReader && typeof state.zxingReader.reset === 'function') {
-                    state.zxingReader.reset();
-                }
-
-                const hints = new Map();
-                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128]);
-                hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-
-                state.zxingReader = new ZXing.BrowserMultiFormatReader(hints, 60);
-
-                console.log('[Finder Scan] Starting ZXing decodeFromVideoElement strictly for Code 128...');
-                
-                state.zxingReader.decodeFromVideoElement(elements.findingVideo, (result, err) => {
-                    if (result && result.getText()) {
-                        processPhysicalBarcode(result.getText());
-                    }
-                });
-            } catch (eZxing) {
-                console.error('[Finder Scan] ZXing continuous error:', eZxing);
             }
-        }
+
+            // Step 2: ZXing Decoder on Raw Video Frame (Horizontal 0°)
+            if (!foundCode && state.zxingReader) {
+                const vW = elements.findingVideo.videoWidth || 640;
+                const vH = elements.findingVideo.videoHeight || 480;
+                scanCanvas.width = vW;
+                scanCanvas.height = vH;
+                scanCtx.drawImage(elements.findingVideo, 0, 0, vW, vH);
+
+                try {
+                    const resA = state.zxingReader.decodeFromCanvas(scanCanvas);
+                    if (resA && resA.getText()) {
+                        foundCode = resA.getText();
+                    }
+                } catch (eA) {}
+
+                // Step 3: ZXing Decoder 90° Rotated for Vertical Tote Barcodes
+                if (!foundCode) {
+                    rotCanvas.width = vH;
+                    rotCanvas.height = vW;
+                    rotCtx.save();
+                    rotCtx.translate(vH / 2, vW / 2);
+                    rotCtx.rotate(Math.PI / 2);
+                    rotCtx.drawImage(scanCanvas, -vW / 2, -vH / 2);
+                    rotCtx.restore();
+
+                    try {
+                        const resB = state.zxingReader.decodeFromCanvas(rotCanvas);
+                        if (resB && resB.getText()) {
+                            foundCode = resB.getText();
+                        }
+                    } catch (eB) {}
+                }
+            }
+
+            if (foundCode) {
+                processPhysicalBarcode(foundCode);
+            }
+        }, 60);
 
         console.log('[Finder Scan] Ready! Hardware Code 128 Detector:', has1DBarcodeDetector, 'ZXing Code 128 Reader:', !!state.zxingReader);
     }
