@@ -793,9 +793,9 @@
             try {
                 if (typeof BarcodeDetector.getSupportedFormats === 'function') {
                     const formats = await BarcodeDetector.getSupportedFormats();
-                    if (formats && (formats.includes('code_128') || formats.includes('code_39'))) {
+                    if (formats && formats.includes('code_128')) {
                         state.findingBarcodeDetector = new BarcodeDetector({
-                            formats: ['code_128', 'code_39', 'ean_13', 'upc_a']
+                            formats: ['code_128']
                         });
                         has1DBarcodeDetector = true;
                     }
@@ -805,7 +805,7 @@
             }
         }
 
-        // 2. Continuous Hardware BarcodeDetector Loop (if supported on Android/iOS)
+        // 2. Continuous Hardware BarcodeDetector Loop (Strictly Code 128)
         if (has1DBarcodeDetector && state.findingBarcodeDetector) {
             state.findingScanInterval = setInterval(async () => {
                 if (!state.isFindingScanning || !elements.findingVideo || elements.findingVideo.readyState < 2) return;
@@ -817,10 +817,10 @@
                         }
                     }
                 } catch (eDet) {}
-            }, 80);
+            }, 60);
         }
 
-        // 3. ZXing Continuous Live Stream Decoder (Industry Standard for Desktop & Mobile Web)
+        // 3. ZXing Continuous Live Stream Decoder (Strictly Code 128)
         if (typeof ZXing !== 'undefined' && elements.findingVideo) {
             try {
                 if (state.zxingReader && typeof state.zxingReader.reset === 'function') {
@@ -828,18 +828,12 @@
                 }
 
                 const hints = new Map();
-                const formats = [
-                    ZXing.BarcodeFormat.CODE_128,
-                    ZXing.BarcodeFormat.CODE_39,
-                    ZXing.BarcodeFormat.EAN_13,
-                    ZXing.BarcodeFormat.UPC_A
-                ];
-                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128]);
                 hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
 
-                state.zxingReader = new ZXing.BrowserMultiFormatReader(hints, 80);
+                state.zxingReader = new ZXing.BrowserMultiFormatReader(hints, 60);
 
-                console.log('[Finder Scan] Starting ZXing decodeFromVideoElement on live video feed...');
+                console.log('[Finder Scan] Starting ZXing decodeFromVideoElement strictly for Code 128...');
                 
                 state.zxingReader.decodeFromVideoElement(elements.findingVideo, (result, err) => {
                     if (result && result.getText()) {
@@ -851,7 +845,7 @@
             }
         }
 
-        console.log('[Finder Scan] Ready! Hardware 1D Detector:', has1DBarcodeDetector, 'ZXing Continuous Reader:', !!state.zxingReader);
+        console.log('[Finder Scan] Ready! Hardware Code 128 Detector:', has1DBarcodeDetector, 'ZXing Code 128 Reader:', !!state.zxingReader);
     }
 
     function processPhysicalBarcode(rawText) {
